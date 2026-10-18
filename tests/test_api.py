@@ -60,7 +60,15 @@ def test_filters_search_and_stats(client):
     assert titles == ["Hades II", "Elden Ring", "Astro Bot"]
 
     stats = client.get("/api/stats").json()
-    assert stats == {"total": 3, "by_platform": {"PC": 2, "PlayStation 5": 1}, "by_format": {"digital": 2, "physical": 1}}
+    # The wishlist game (Hades II) counts in the total but not in the collection figures
+    assert stats["total"] == 3 and stats["collection"] == 2
+    assert stats["by_platform"] == {"PC": 1, "PlayStation 5": 1}
+    assert stats["by_format"] == {"digital": 1, "physical": 1}
+    assert stats["by_status"] == {"owned": 2, "wishlist": 1}
+    assert stats["loaned"] == 0
+
+    both = client.get("/api/games", params=[("status", "owned"), ("status", "wishlist")]).json()
+    assert both["total"] == 3
 
 
 def test_cover_upload(client, tmp_path):

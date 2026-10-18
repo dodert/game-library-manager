@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
 from .config import Settings, settings as default_settings
+from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
 from .images import IMAGE_TYPES, ImageError, fetch_image, save_first_cover
 from .migrate import upgrade_database
@@ -21,7 +22,7 @@ from .models import Game, GameFormat, GameStatus, Platform
 from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
-    CoverFetchIn, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
+    CoverFetchIn, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
     ProviderOut, SteamImportOut,
 )
 from .seed import seed_platforms
@@ -29,6 +30,7 @@ from .seed import seed_platforms
 STATIC_DIR = Path(__file__).parent / "static"
 ALLOWED_COVER_TYPES = IMAGE_TYPES
 USER_AGENT = f"game-library-manager/{__version__}"
+MAX_CSV_BYTES = 20 * 1024 * 1024
 SORT_FIELDS = {
     "title": Game.title,
     "created_at": Game.created_at,
@@ -111,7 +113,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         q: str | None = None,
         platform_id: int | None = None,
         format: GameFormat | None = None,
-        status: GameStatus | None = None,
+        status: list[GameStatus] = Query(default=[]),
         sort: str = Query("title", pattern="^-?(title|created_at|release_year|purchase_date)$"),
         limit: int = Query(100, ge=1, le=500),
         offset: int = Query(0, ge=0),
@@ -120,13 +122,16 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         stmt = select(Game)
         if q:
             like = f"%{q}%"
-            stmt = stmt.where(or_(Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like)))
+            stmt = stmt.where(or_(
+                Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like), Game.tags.ilike(like),
+                Game.publisher.ilike(like), Game.developer.ilike(like), Game.series.ilike(like),
+            ))
         if platform_id:
             stmt = stmt.where(Game.platform_id == platform_id)
         if format:
             stmt = stmt.where(Game.format == format)
         if status:
-            stmt = stmt.where(Game.status == status)
+            stmt = stmt.where(Game.status.in_(status))
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
         column = SORT_FIELDS[sort.lstrip("-")]
         order = column.desc() if sort.startswith("-") else column.asc()
@@ -273,16 +278,45 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     @app.get("/api/stats")
     def stats(db: Session = Depends(get_db)):
+        def counts(column, *where):
+            rows = db.execute(select(column, func.count(Game.id)).where(*where).group_by(column)).all()
+            return {(k.value if hasattr(k, "value") else k): n for k, n in rows}
+
+        collection = Game.status.in_([GameStatus.owned, GameStatus.lent])
         by_platform = db.execute(
             select(Platform.name, func.count(Game.id))
-            .join(Game).group_by(Platform.name).order_by(func.count(Game.id).desc())
+            .join(Game).where(collection).group_by(Platform.name).order_by(func.count(Game.id).desc())
         ).all()
-        by_format = db.execute(select(Game.format, func.count(Game.id)).group_by(Game.format)).all()
         return {
             "total": db.scalar(select(func.count(Game.id))),
+            "collection": db.scalar(select(func.count(Game.id)).where(collection)),
             "by_platform": {name: n for name, n in by_platform},
-            "by_format": {fmt.value: n for fmt, n in by_format},
+            "by_format": counts(Game.format, collection),
+            "by_status": counts(Game.status),
+            "by_completion": counts(Game.completion, collection),
+            "total_spent": round(db.scalar(select(func.coalesce(func.sum(Game.purchase_price), 0)).where(collection)) or 0, 2),
+            "loaned": db.scalar(select(func.count(Game.id)).where(Game.status == GameStatus.lent)),
         }
+
+    @app.get("/api/export/csv")
+    def export(db: Session = Depends(get_db)):
+        return Response(
+            export_csv(db),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="game-library.csv"'},
+        )
+
+    @app.post("/api/import/csv", response_model=CsvImportOut)
+    def import_file(
+        file: UploadFile = File(...),
+        default_format: GameFormat = Form(GameFormat.physical),
+        skip_duplicates: bool = Form(True),
+        db: Session = Depends(get_db),
+    ):
+        raw = file.file.read(MAX_CSV_BYTES + 1)
+        if len(raw) > MAX_CSV_BYTES:
+            raise HTTPException(413, "CSV too large")
+        return import_csv(db, raw, default_format, skip_duplicates)
 
     app.mount("/covers", StaticFiles(directory=covers_dir), name="covers")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

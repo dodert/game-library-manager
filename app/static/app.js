@@ -10,6 +10,9 @@ const api = async (path, opts = {}) => {
 };
 
 let providers = [];
+let tab = "collection";
+const TAB_STATUS = { collection: ["owned", "lent"], wishlist: ["wishlist"], lent: ["lent"], sold: ["sold"] };
+const COMPLETION = { unplayed: "Sin jugar", playing: "Jugando", completed: "Completado", abandoned: "Abandonado" };
 let pendingCover = null; // {provider, urls, thumb} chosen from an online search
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -76,17 +79,56 @@ function applyResult(r) {
   $("#lookup").hidden = true;
 }
 
+const money = (n) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+
+function bars(title, data, labels = {}) {
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return "";
+  const max = Math.max(...entries.map(([, n]) => n));
+  return `<section class="panel"><h3>${esc(title)}</h3>${entries.map(([k, n]) => `
+    <div class="bar-row" title="${esc(labels[k] ?? k)}: ${n}">
+      <span class="bar-label">${esc(labels[k] ?? k)}</span>
+      <span class="bar-track"><span class="bar" style="width:${(n / max) * 100}%"></span></span>
+      <span class="bar-value">${n}</span>
+    </div>`).join("")}</section>`;
+}
+
 async function loadStats() {
   const s = await api("/api/stats");
   $("#stats").textContent =
-    `${s.total} juegos · ${s.by_format.physical ?? 0} físicos · ${s.by_format.digital ?? 0} digitales`;
+    `${s.collection} en colección · ${s.by_format.physical ?? 0} físicos · ${s.by_format.digital ?? 0} digitales`;
+  if (tab !== "stats") return;
+  $("#stats-view").innerHTML = `
+    <div class="tiles">
+      <div class="tile"><div class="tile-value">${s.collection}</div><div class="tile-label">En colección</div></div>
+      <div class="tile"><div class="tile-value">${s.by_status.wishlist ?? 0}</div><div class="tile-label">En wishlist</div></div>
+      <div class="tile"><div class="tile-value">${s.loaned}</div><div class="tile-label">Prestados</div></div>
+      <div class="tile"><div class="tile-value">${money(s.total_spent)}</div><div class="tile-label">Gastado</div></div>
+    </div>
+    <div class="panels">
+      ${bars("Por plataforma", s.by_platform)}
+      ${bars("Por formato", s.by_format, FORMAT)}
+      ${bars("Progreso", s.by_completion, COMPLETION)}
+    </div>
+    <p class="hint">Las cifras de colección incluyen los prestados; no incluyen wishlist ni vendidos.</p>`;
+}
+
+function setTab(name) {
+  tab = name;
+  document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  const isStats = name === "stats";
+  $("#filters").hidden = isStats;
+  $("#grid").hidden = isStats;
+  $("#stats-view").hidden = !isStats;
+  if (isStats) { $("#empty").hidden = true; loadStats(); } else loadGames();
 }
 
 async function loadGames() {
   const params = new URLSearchParams();
-  for (const [key, el] of [["q", "#q"], ["platform_id", "#f-platform"], ["format", "#f-format"], ["status", "#f-status"], ["sort", "#sort"]]) {
+  for (const [key, el] of [["q", "#q"], ["platform_id", "#f-platform"], ["format", "#f-format"], ["sort", "#sort"]]) {
     if ($(el).value) params.set(key, $(el).value);
   }
+  for (const status of TAB_STATUS[tab] ?? []) params.append("status", status);
   const page = await api(`/api/games?${params}`);
   $("#empty").hidden = page.total > 0;
   $("#grid").innerHTML = page.items.map((g) => `
@@ -95,12 +137,18 @@ async function loadGames() {
       <div class="info">
         <div class="title">${esc(g.title)}</div>
         <div class="meta">${esc(g.platform.name)}${g.release_year ? " · " + g.release_year : ""}</div>
-        <span class="badge">${FORMAT[g.format]}</span>${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
+        <span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
+        ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
     </article>`).join("");
 }
 
-const refresh = () => Promise.all([loadGames(), loadStats()]);
+const refresh = () => Promise.all([tab === "stats" ? null : loadGames(), loadStats()]);
+
+function setPane(name) {
+  document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.pane === name));
+  document.querySelectorAll("#game-form .pane").forEach((p) => { p.hidden = p.dataset.pane !== name; });
+}
 
 function openDialog(game) {
   const form = $("#game-form");
@@ -113,9 +161,10 @@ function openDialog(game) {
   form.elements.id.value = game?.id ?? "";
   if (game) {
     for (const el of form.elements) {
-      if (el.name && !SKIP_FIELDS.has(el.name) && game[el.name] != null) el.value = game[el.name];
+      if (el.name && !SKIP_FIELDS.has(el.name) && game[el.name] != null) el.value = String(game[el.name]);
     }
   }
+  setPane("general");
   $("#dlg").showModal();
 }
 
@@ -127,8 +176,13 @@ $("#game-form").addEventListener("submit", async (ev) => {
     if (!el.name || SKIP_FIELDS.has(el.name)) continue;
     data[el.name] = el.value === "" ? null : el.value;
   }
+  for (const el of form.elements) {
+    if (data[el.name] == null) continue;
+    if (el.dataset.type === "number") data[el.name] = Number(data[el.name]);
+    if (el.dataset.type === "bool") data[el.name] = data[el.name] === "true";
+  }
   for (const key of ["platform_id", "release_year", "steam_appid"]) if (data[key] != null) data[key] = Number(data[key]);
-  if (data.purchase_price != null) data.purchase_price = Number(data.purchase_price);
+  if (data.loaned_to && data.status === "owned") data.status = "lent";
 
   const id = form.elements.id.value;
   try {
@@ -169,6 +223,28 @@ $("#delete-btn").addEventListener("click", async () => {
 });
 
 $("#lookup-btn").addEventListener("click", lookup);
+document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
+$("#csv-import-btn").addEventListener("click", () => $("#csv-file").click());
+$("#csv-file").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = "";
+  if (!file) return;
+  const digital = confirm("¿Los juegos sin columna de formato son digitales?\nAceptar = digital · Cancelar = físico");
+  const body = new FormData();
+  body.append("file", file);
+  body.append("default_format", digital ? "digital" : "physical");
+  try {
+    const r = await api("/api/import/csv", { method: "POST", body });
+    let msg = `${r.imported} importados, ${r.skipped} omitidos (duplicados o sin título).`;
+    if (r.errors.length) msg += `\n\nErrores:\n` + r.errors.slice(0, 10).map((e) => `Fila ${e.row}: ${e.message}`).join("\n");
+    if (r.unmapped_columns.length) msg += `\n\nColumnas ignoradas: ${r.unmapped_columns.join(", ")}`;
+    alert(msg);
+    refresh();
+  } catch (err) {
+    alert(err.message);
+  }
+});
 $("#steam-import-btn").addEventListener("click", async () => {
   if (!confirm("¿Importar tu biblioteca de Steam? Los juegos ya importados se omiten.")) return;
   try {
@@ -188,6 +264,6 @@ $("#grid").addEventListener("click", async (ev) => {
 
 let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadGames, 250); });
-for (const sel of ["#f-platform", "#f-format", "#f-status", "#sort"]) $(sel).addEventListener("change", loadGames);
+for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", loadGames);
 
 Promise.all([loadPlatforms(), loadProviders()]).then(refresh);

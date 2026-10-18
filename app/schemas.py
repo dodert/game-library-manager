@@ -31,6 +31,28 @@ class GameBase(BaseModel):
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
+    loaned_to: str | None = None
+    loaned_at: date | None = None
+    loan_due: date | None = None
+    publisher: str | None = Field(default=None, max_length=150)
+    developer: str | None = Field(default=None, max_length=150)
+    genre: str | None = Field(default=None, max_length=150)
+    series: str | None = Field(default=None, max_length=150)
+    item_type: str | None = Field(default=None, max_length=50)
+    serial_number: str | None = Field(default=None, max_length=100)
+    completeness: str | None = Field(default=None, max_length=30)
+    condition: str | None = Field(default=None, max_length=50)
+    has_box: bool | None = None
+    has_manual: bool | None = None
+    quantity: int | None = Field(default=None, ge=0)
+    current_value: float | None = Field(default=None, ge=0)
+    owner: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, max_length=150)
+    storage_device: str | None = Field(default=None, max_length=150)
+    storage_slot: str | None = Field(default=None, max_length=50)
+    rating: int | None = Field(default=None, ge=0, le=10)
+    tags: str | None = Field(default=None, max_length=500)
+    completed_at: date | None = None
 
 
 class GameIn(GameBase):
@@ -53,6 +75,28 @@ class GameUpdate(BaseModel):
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
+    loaned_to: str | None = None
+    loaned_at: date | None = None
+    loan_due: date | None = None
+    publisher: str | None = Field(default=None, max_length=150)
+    developer: str | None = Field(default=None, max_length=150)
+    genre: str | None = Field(default=None, max_length=150)
+    series: str | None = Field(default=None, max_length=150)
+    item_type: str | None = Field(default=None, max_length=50)
+    serial_number: str | None = Field(default=None, max_length=100)
+    completeness: str | None = Field(default=None, max_length=30)
+    condition: str | None = Field(default=None, max_length=50)
+    has_box: bool | None = None
+    has_manual: bool | None = None
+    quantity: int | None = Field(default=None, ge=0)
+    current_value: float | None = Field(default=None, ge=0)
+    owner: str | None = Field(default=None, max_length=100)
+    location: str | None = Field(default=None, max_length=150)
+    storage_device: str | None = Field(default=None, max_length=150)
+    storage_slot: str | None = Field(default=None, max_length=50)
+    rating: int | None = Field(default=None, ge=0, le=10)
+    tags: str | None = Field(default=None, max_length=500)
+    completed_at: date | None = None
 
 
 class GameOut(GameBase):
@@ -100,3 +144,15 @@ class CoverFetchIn(BaseModel):
 class SteamImportOut(BaseModel):
     imported: int
     skipped: int
+
+
+class ImportRowError(BaseModel):
+    row: int
+    message: str
+
+
+class CsvImportOut(BaseModel):
+    imported: int
+    skipped: int
+    errors: list[ImportRowError]
+    unmapped_columns: list[str]

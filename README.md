@@ -9,7 +9,12 @@ Work in progress. Roadmap:
 1. ✅ Core app: FastAPI backend, web UI, SQLite by default (PostgreSQL optional).
 2. ✅ Covers & metadata: IGDB, SteamGridDB, Steam, ScreenScraper.
 3. ✅ Docker image (amd64/arm64) on GHCR, docker-compose and Unraid template.
-4. CLZ-style extras: CSV import, stats, wishlist, loans.
+4. ✅ CLZ-style extras: CSV import, stats, wishlist, loans.
+
+## Import / export
+
+- **Exportar CSV** downloads the whole library (`/api/export/csv`).
+- **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Comma, semicolon or tab separated; UTF-8 or Windows-1252. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
 
 ## Docker
 
