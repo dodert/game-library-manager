@@ -25,11 +25,13 @@ Or use [`docker-compose.yml`](docker-compose.yml). Everything lives in `/data` (
 
 ## Unraid
 
-**Option A — template repository.** The template is published to the public repo [dodert/unraid-templates](https://github.com/dodert/unraid-templates) by the `Sync Unraid template` workflow. In Unraid, add `https://github.com/dodert/unraid-templates` to **Docker → Template repositories**, save, then pick `game-library-manager` in **Docker → Add Container**.
+The `Sync Unraid template` workflow publishes the template to the public repo [dodert/unraid-templates](https://github.com/dodert/unraid-templates). (Unraid removed the "Template repositories" setting in 6.10, so the template is installed with one command.)
 
-**Option B — manual.**
-
-1. Copy [`unraid/game-library-manager.xml`](unraid/game-library-manager.xml) to `/boot/config/plugins/dockerMan/templates-user/my-game-library-manager.xml` on the server.
+1. In the Unraid terminal:
+   ```bash
+   mkdir -p /boot/config/plugins/dockerMan/templates-user && curl -fsSL https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml -o /boot/config/plugins/dockerMan/templates-user/my-game-library-manager.xml
+   ```
+   Run it again to update the template.
 2. In **Docker → Add Container**, pick `game-library-manager` from the template list.
 3. Fill in the provider keys you have and click **Apply**. Data goes to `/mnt/user/appdata/game-library-manager`.
 
