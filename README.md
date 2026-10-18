@@ -108,4 +108,4 @@ If this app is useful to you, you can support its development with a coffee on K
 
 ## License
 
-[MIT](LICENSE)
+[GPL-3.0](LICENSE)
