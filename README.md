@@ -50,7 +50,7 @@ mkdir -p /boot/config/plugins/community.applications/private/dodert && curl -fsS
 
 ## Covers for imported games
 
-**Buscar carátulas** looks every game up in the enabled providers (IGDB, ScreenScraper, SteamGridDB and Steam, best match by title and platform) and downloads the cover. It fills the description and year only where they are empty. Choose **Solo los que nunca se han buscado** to cover games added since the last run (for example after a CSV import), or **Todos** to search the whole library again and replace existing covers. It runs in the background with a progress bar; games with no match are marked "Sin resultados" in their card's dialog. `SCRAPE_DELAY` (seconds between games, default `0.5`) keeps it inside the providers' rate limits.
+**Buscar carátulas** looks every game up in the providers you tick (any of the enabled ones: IGDB, ScreenScraper, SteamGridDB and Steam; best match by title and platform). Choose what to fetch: the **cover**, the **game data** (description, year, publisher, developer, genre and series), or both. Data only fills fields that are empty; IGDB and ScreenScraper provide publisher/developer/genre, IGDB also the series, SteamGridDB only covers. Choose **Solo los que nunca se han buscado** to cover games added since the last run (for example after a CSV import), or **Todos** to search the whole library again and replace existing covers. It runs in the background with a progress bar; games with no match are marked "Sin resultados" in their card's dialog. `SCRAPE_DELAY` (seconds between games, default `0.5`) keeps it inside the providers' rate limits.
 
 **Borrar todo** empties the library (games, covers and the platforms added by you or an import) after you type `BORRAR`. Export a CSV first if you want a copy.
 

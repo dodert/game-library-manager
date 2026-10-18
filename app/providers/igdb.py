@@ -7,6 +7,15 @@ API_URL = "https://api.igdb.com/v4"
 IMAGE_URL = "https://images.igdb.com/igdb/image/upload/{size}/{image_id}.jpg"
 
 
+def _join(names) -> str | None:
+    return ", ".join(n for n in names if n) or None
+
+
+def _companies(involved: list[dict], role: str) -> str | None:
+    """Names of the companies with the given role ("publisher" or "developer")."""
+    return _join((c.get("company") or {}).get("name") for c in involved if c.get(role))
+
+
 class IGDBProvider(MetadataProvider):
     """IGDB (https://api-docs.igdb.com). Needs a Twitch developer app: client id + secret."""
 
@@ -44,7 +53,9 @@ class IGDBProvider(MetadataProvider):
         safe_query = query.replace('"', "")
         body = (
             f'search "{safe_query}"; '
-            "fields name, first_release_date, summary, cover.image_id, platforms.name; "
+            "fields name, first_release_date, summary, cover.image_id, platforms.name, genres.name, "
+            "collection.name, involved_companies.publisher, involved_companies.developer, "
+            "involved_companies.company.name; "
             f"limit {limit};"
         )
         res = await self.http.post(
@@ -56,6 +67,7 @@ class IGDBProvider(MetadataProvider):
         results = []
         for game in res.json():
             image_id = (game.get("cover") or {}).get("image_id")
+            companies = game.get("involved_companies", [])
             results.append(SearchResult(
                 provider=self.name,
                 external_id=str(game["id"]),
@@ -63,6 +75,10 @@ class IGDBProvider(MetadataProvider):
                 release_year=year_from(game.get("first_release_date")),
                 platforms=[p["name"] for p in game.get("platforms", []) if "name" in p],
                 summary=game.get("summary"),
+                publisher=_companies(companies, "publisher"),
+                developer=_companies(companies, "developer"),
+                genre=_join(g.get("name") for g in game.get("genres", [])),
+                series=(game.get("collection") or {}).get("name"),
                 cover_urls=[IMAGE_URL.format(size="t_cover_big_2x", image_id=image_id)] if image_id else [],
                 thumb_url=IMAGE_URL.format(size="t_cover_small", image_id=image_id) if image_id else None,
             ))

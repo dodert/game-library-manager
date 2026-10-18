@@ -11,6 +11,10 @@ class SearchResult:
     release_year: int | None = None
     platforms: list[str] = field(default_factory=list)
     summary: str | None = None
+    publisher: str | None = None
+    developer: str | None = None
+    genre: str | None = None
+    series: str | None = None
     # Full-size cover candidates, best first; thumb is for the result list.
     cover_urls: list[str] = field(default_factory=list)
     thumb_url: str | None = None

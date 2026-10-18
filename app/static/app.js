@@ -69,6 +69,7 @@ function applyResult(r) {
   f.title.value = r.title;
   if (r.release_year) f.release_year.value = r.release_year;
   if (r.summary) f.summary.value = r.summary;
+  for (const key of ["publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
   if (r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
@@ -486,10 +487,12 @@ function renderScrape(st) {
   const progress = bar.querySelector("progress");
   progress.max = st.total || 1;
   progress.value = st.done;
-  const counts = `${st.covers} carátulas nuevas · ${st.found} encontrados · ${st.not_found} sin resultados` +
+  const counts = (st.want_covers ? `${st.covers} carátulas nuevas · ` : "") +
+    (st.want_details ? `${st.details} con datos nuevos · ` : "") +
+    `${st.found} encontrados · ${st.not_found} sin resultados` +
     (st.failed ? ` · ${st.failed} con error` : "");
   bar.querySelector(".scrape-text").textContent = st.running
-    ? `Buscando ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    ? `Buscando en ${st.sources.join(", ")} ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
     : `${st.cancelled ? "Búsqueda cancelada" : "Búsqueda terminada"}: ${st.done}/${st.total} · ${counts}` +
       (st.errors.length ? ` · Errores: ${st.errors.slice(0, 3).join(" | ")}` : "");
   $("#scrape-cancel").hidden = !st.running;
@@ -512,8 +515,17 @@ async function pollScrape() {
 async function openScrapeDialog() {
   const st = await api("/api/scrape");
   if (st.running) { renderScrape(st); return; }
-  $("#scrape-providers").textContent = `Fuentes activas: ${st.providers.join(", ") || "ninguna"}.` +
-    (st.providers.length <= 1 ? " Añade claves de IGDB, SteamGridDB o ScreenScraper para mejores resultados." : "");
+  const enabled = providers.filter((p) => p.enabled);
+  // Remember which sources were unticked, so a newly configured source starts ticked
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("glm-scrape-prefs") || "{}"); } catch {}
+  $("#scrape-providers").innerHTML = enabled.map((p) =>
+    `<label class="radio"><input type="checkbox" name="provider" value="${esc(p.name)}"${(saved.excluded ?? []).includes(p.name) ? "" : " checked"}> ${esc(p.label)}</label>`,
+  ).join("") || "Ninguna fuente activa.";
+  $("#scrape-providers-hint").hidden = enabled.length > 1;
+  const form = $("#scrape-form").elements;
+  if (saved.covers !== undefined) form.covers.checked = saved.covers;
+  if (saved.details !== undefined) form.details.checked = saved.details;
   $("#scrape-missing-label").textContent = `Solo los que nunca se han buscado (${st.never_scraped})`;
   $("#scrape-all-label").textContent = `Todos (${st.library_total})`;
   $("#scrape-dlg").showModal();
@@ -521,11 +533,23 @@ async function openScrapeDialog() {
 
 $("#scrape-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const mode = new FormData(ev.target).get("mode");
+  const data = new FormData(ev.target);
+  const body = {
+    mode: data.get("mode"),
+    providers: data.getAll("provider"),
+    covers: ev.target.elements.covers.checked,
+    details: ev.target.elements.details.checked,
+  };
+  if (!body.providers.length) return alert("Elige al menos una fuente");
+  if (!body.covers && !body.details) return alert("Elige carátula, datos o ambos");
+  try { localStorage.setItem("glm-scrape-prefs", JSON.stringify({
+    excluded: providers.filter((p) => p.enabled && !body.providers.includes(p.name)).map((p) => p.name),
+    covers: body.covers, details: body.details,
+  })); } catch {}
   $("#scrape-dlg").close();
   try {
     renderScrape(await api("/api/scrape", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }));
     if (!scrapePoll) pollScrape();
   } catch (err) {

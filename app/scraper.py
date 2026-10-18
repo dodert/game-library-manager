@@ -81,6 +81,27 @@ def cover_options(game_title: str, platform: str, results: list[SearchResult],
     return options[:MAX_COVER_OPTIONS]
 
 
+# Game fields a lookup can fill (only when empty), and the text limit of each column
+DETAIL_FIELDS = {"summary": None, "release_year": None, "publisher": 150, "developer": 150, "genre": 150, "series": 150}
+
+
+def fill_details(game: Game, matches: list[SearchResult]) -> bool:
+    """Fill the game's empty detail fields from the best match that has each one. True if any was filled."""
+    filled = False
+    for name, limit in DETAIL_FIELDS.items():
+        if getattr(game, name) not in (None, ""):
+            continue
+        value = next((getattr(r, name) for r in matches if getattr(r, name)), None)
+        if name == "summary":
+            value = clean_html(value)
+        elif isinstance(value, str) and limit:
+            value = value[:limit]
+        if value:
+            setattr(game, name, value)
+            filled = True
+    return filled
+
+
 @dataclass
 class ScrapeStatus:
     running: bool = False
@@ -89,8 +110,12 @@ class ScrapeStatus:
     done: int = 0
     found: int = 0
     covers: int = 0
+    details: int = 0  # games that got at least one empty field filled
     not_found: int = 0
     failed: int = 0
+    sources: list[str] = field(default_factory=list)  # labels of the providers used
+    want_covers: bool = True
+    want_details: bool = True
     current: str | None = None
     started_at: str | None = None
     finished_at: str | None = None
@@ -115,6 +140,7 @@ class Scraper:
         self.status = ScrapeStatus()
         self._task: asyncio.Task | None = None
         self._cancel = False
+        self._selected: list[MetadataProvider] = []
 
     @property
     def enabled_providers(self) -> list[MetadataProvider]:
@@ -123,17 +149,26 @@ class Scraper:
     def status_dict(self) -> dict:
         return asdict(self.status)
 
-    def start(self, mode: str) -> None:
+    def start(self, mode: str, providers: list[str] | None = None, covers: bool = True, details: bool = True) -> None:
         if self.status.running:
             raise RuntimeError("A lookup is already running")
+        enabled = {p.name: p for p in self.enabled_providers}
+        unknown = [name for name in providers or [] if name not in enabled]
+        if unknown:
+            raise ValueError(f"Provider not available: {', '.join(unknown)}")
+        selected = [enabled[name] for name in providers] if providers else list(enabled.values())
+        if not selected:
+            raise ValueError("No provider is enabled")
         with self.session_factory() as db:
             stmt = select(Game.id).order_by(Game.title, Game.id)
             if mode == "missing":
                 stmt = stmt.where(Game.scraped_at.is_(None))
             game_ids = list(db.scalars(stmt))
         self._cancel = False
+        self._selected = selected
         self.status = ScrapeStatus(
-            running=True, mode=mode, total=len(game_ids), started_at=datetime.now(timezone.utc).isoformat()
+            running=True, mode=mode, total=len(game_ids), started_at=datetime.now(timezone.utc).isoformat(),
+            sources=[p.label for p in selected], want_covers=covers, want_details=details,
         )
         self._task = asyncio.create_task(self._run(game_ids, replace_covers=mode == "all"))
 
@@ -157,6 +192,7 @@ class Scraper:
             self.status.finished_at = datetime.now(timezone.utc).isoformat()
 
     async def scrape_game(self, game_id: int, replace_cover: bool) -> None:
+        covers, details = self.status.want_covers, self.status.want_details
         with self.session_factory() as db:
             game = db.get(Game, game_id, options=[selectinload(Game.platform)])
             if not game:
@@ -167,19 +203,15 @@ class Scraper:
                 results = await self._search(title)
                 matches = rank_results(title, platform, results)
                 cover = None
-                if replace_cover or not game.cover_path:
+                if covers and (replace_cover or not game.cover_path):
                     cover = await self._download_cover(game, matches)
                 if cover:
                     if game.cover_path:
                         (self.covers_dir / game.cover_path).unlink(missing_ok=True)
                     game.cover_path = cover
                     self.status.covers += 1
-                best = matches[0] if matches else None
-                if best:
-                    if not game.summary:
-                        game.summary = clean_html(next((r.summary for r in matches if r.summary), None))
-                    if not game.release_year:
-                        game.release_year = next((r.release_year for r in matches if r.release_year), None)
+                if details and matches and fill_details(game, matches):
+                    self.status.details += 1
                 if matches or cover:
                     self.status.found += 1
                     game.scrape_error = None
@@ -196,7 +228,7 @@ class Scraper:
             db.commit()
 
     async def _search(self, title: str) -> list[SearchResult]:
-        providers = self.enabled_providers
+        providers = self._selected or self.enabled_providers
         outcomes = await asyncio.gather(*(p.search(title) for p in providers), return_exceptions=True)
         results, errors = [], []
         for provider, outcome in zip(providers, outcomes):
@@ -211,7 +243,7 @@ class Scraper:
     async def _download_cover(self, game: Game, matches: list[SearchResult]) -> str | None:
         candidates: list[tuple[MetadataProvider, list[str]]] = []
         steam = self.providers.get("steam")
-        if game.steam_appid and steam:
+        if game.steam_appid and steam and steam in (self._selected or self.enabled_providers):
             candidates.append((steam, steam_cover_candidates(game.steam_appid)))
         for result in matches:
             provider = self.providers.get(result.provider)

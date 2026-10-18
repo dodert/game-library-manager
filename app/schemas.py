@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models import CompletionStatus, GameFormat, GameStatus
 
@@ -130,6 +130,10 @@ class MetadataResult(BaseModel):
     release_year: int | None = None
     platforms: list[str] = []
     summary: str | None = None
+    publisher: str | None = None
+    developer: str | None = None
+    genre: str | None = None
+    series: str | None = None
     cover_urls: list[str] = []
     thumb_url: str | None = None
     cover_thumbs: list[str] = []
@@ -179,6 +183,16 @@ class CsvImportOut(BaseModel):
 
 class ScrapeIn(BaseModel):
     mode: Literal["missing", "all"] = "missing"
+    # Provider names to use; empty means every enabled provider
+    providers: list[str] = []
+    covers: bool = True
+    details: bool = True
+
+    @model_validator(mode="after")
+    def something_to_do(self):
+        if not (self.covers or self.details):
+            raise ValueError("Choose covers, details or both")
+        return self
 
 
 class ScrapeStatusOut(BaseModel):
@@ -188,8 +202,12 @@ class ScrapeStatusOut(BaseModel):
     done: int
     found: int
     covers: int
+    details: int
     not_found: int
     failed: int
+    sources: list[str]
+    want_covers: bool
+    want_details: bool
     current: str | None
     started_at: str | None
     finished_at: str | None

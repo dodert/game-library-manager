@@ -289,9 +289,11 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     @app.post("/api/scrape", response_model=ScrapeStatusOut, status_code=202)
     async def start_scrape(data: ScrapeIn, db: Session = Depends(get_db)):
         try:
-            scraper.start(data.mode)
+            scraper.start(data.mode, data.providers, covers=data.covers, details=data.details)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
         return scrape_status(db)
 
     @app.post("/api/scrape/cancel", response_model=ScrapeStatusOut)
