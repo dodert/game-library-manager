@@ -32,6 +32,39 @@ async function loadProviders() {
 const proxied = (provider, url) =>
   url ? `/api/metadata/image?provider=${encodeURIComponent(provider)}&url=${encodeURIComponent(url)}` : null;
 
+// Sources and "cover / data" choices, shared by the bulk lookup and the game dialog.
+// Unticked sources are remembered (not ticked ones), so a newly configured source starts ticked.
+function loadSourcePrefs() {
+  try { return JSON.parse(localStorage.getItem("glm-scrape-prefs") || "{}"); } catch { return {}; }
+}
+
+function saveSourcePrefs(selected, covers, details) {
+  const excluded = providers.filter((p) => p.enabled && !selected.includes(p.name)).map((p) => p.name);
+  try { localStorage.setItem("glm-scrape-prefs", JSON.stringify({ excluded, covers, details })); } catch {}
+}
+
+const providerChecks = (name, prefs) => providers.filter((p) => p.enabled).map((p) =>
+  `<label class="radio"><input type="checkbox" name="${name}" value="${esc(p.name)}"${(prefs.excluded ?? []).includes(p.name) ? "" : " checked"}> ${esc(p.label)}</label>`,
+).join("");
+
+function renderLookupOpts() {
+  const prefs = loadSourcePrefs();
+  $("#lookup-providers").innerHTML = providerChecks("lookup-provider", prefs);
+  $("#use-cover").checked = prefs.covers ?? true;
+  $("#use-details").checked = prefs.details ?? true;
+}
+
+const lookupProviders = () => [...document.querySelectorAll("#lookup-providers input:checked")].map((el) => el.value);
+
+function providerQuery() {
+  const selected = lookupProviders();
+  if (!selected.length) throw new Error("Elige al menos una fuente");
+  return selected.map((name) => `&provider=${encodeURIComponent(name)}`).join("");
+}
+
+$("#lookup-opts").addEventListener("change", () =>
+  saveSourcePrefs(lookupProviders(), $("#use-cover").checked, $("#use-details").checked));
+
 async function lookup() {
   const title = $("#game-form").elements.title.value.trim();
   if (!title) return;
@@ -39,10 +72,10 @@ async function lookup() {
   $("#lookup-results").innerHTML = "";
   $("#lookup-status").textContent = "Buscando…";
   try {
-    const { results, errors } = await api(`/api/metadata/search?q=${encodeURIComponent(title)}`);
+    const { results, errors } = await api(`/api/metadata/search?q=${encodeURIComponent(title)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
-    const active = providers.filter((p) => p.enabled).map((p) => p.label).join(", ");
+    const active = lookupProviders().map(label).join(", ");
     $("#lookup-status").textContent =
       `${results.length} resultados (${active})` + (failed.length ? ` · Error en ${failed.join(" · ")}` : "");
     $("#lookup-results").innerHTML = results.map((r, i) => {
@@ -66,12 +99,12 @@ async function lookup() {
 
 function applyResult(r) {
   const f = $("#game-form").elements;
-  f.title.value = r.title;
-  if (r.release_year) f.release_year.value = r.release_year;
-  if (r.summary) f.summary.value = r.summary;
-  for (const key of ["publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
+  if ($("#use-details").checked) {
+    f.title.value = r.title;
+    for (const key of ["release_year", "summary", "publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
+  }
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
-  if (r.cover_urls.length) {
+  if ($("#use-cover").checked && r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
     showCover(proxied(r.provider, r.thumb_url || r.cover_urls[0]), proxied(r.provider, r.cover_urls[0]));
     $("#cover-preview span").textContent = "Esta carátula se descargará al guardar";
@@ -94,7 +127,7 @@ async function searchCovers() {
   $("#cover-picker-grid").innerHTML = "";
   $("#cover-picker-status").textContent = "Buscando carátulas…";
   try {
-    const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}`);
+    const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
     const matching = options.filter((o) => o.matches).length;
@@ -329,6 +362,7 @@ function openDialog(game) {
   const form = $("#game-form");
   form.reset();
   pendingCover = null;
+  renderLookupOpts();
   $("#lookup").hidden = true;
   $("#cover-preview").hidden = !game?.cover_url;
   $("#cover-picker").hidden = true;
@@ -516,12 +550,8 @@ async function openScrapeDialog() {
   const st = await api("/api/scrape");
   if (st.running) { renderScrape(st); return; }
   const enabled = providers.filter((p) => p.enabled);
-  // Remember which sources were unticked, so a newly configured source starts ticked
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem("glm-scrape-prefs") || "{}"); } catch {}
-  $("#scrape-providers").innerHTML = enabled.map((p) =>
-    `<label class="radio"><input type="checkbox" name="provider" value="${esc(p.name)}"${(saved.excluded ?? []).includes(p.name) ? "" : " checked"}> ${esc(p.label)}</label>`,
-  ).join("") || "Ninguna fuente activa.";
+  const saved = loadSourcePrefs();
+  $("#scrape-providers").innerHTML = providerChecks("provider", saved) || "Ninguna fuente activa.";
   $("#scrape-providers-hint").hidden = enabled.length > 1;
   const form = $("#scrape-form").elements;
   if (saved.covers !== undefined) form.covers.checked = saved.covers;
@@ -542,10 +572,7 @@ $("#scrape-form").addEventListener("submit", async (ev) => {
   };
   if (!body.providers.length) return alert("Elige al menos una fuente");
   if (!body.covers && !body.details) return alert("Elige carátula, datos o ambos");
-  try { localStorage.setItem("glm-scrape-prefs", JSON.stringify({
-    excluded: providers.filter((p) => p.enabled && !body.providers.includes(p.name)).map((p) => p.name),
-    covers: body.covers, details: body.details,
-  })); } catch {}
+  saveSourcePrefs(body.providers, body.covers, body.details);
   $("#scrape-dlg").close();
   try {
     renderScrape(await api("/api/scrape", {

@@ -125,6 +125,12 @@
         <label>Título <input name="title" maxlength="300" required></label>
         <button type="button" id="lookup-btn">Buscar en internet</button>
       </div>
+      <div id="lookup-opts" class="lookup-opts">
+        <span class="opts-label">Fuentes:</span><span id="lookup-providers"></span>
+        <span class="opts-label">Usar:</span>
+        <label class="radio"><input type="checkbox" id="use-cover" checked> Carátula</label>
+        <label class="radio"><input type="checkbox" id="use-details" checked> Datos</label>
+      </div>
       <div id="lookup" hidden>
         <div id="lookup-status"></div>
         <div id="lookup-results"></div>
