@@ -21,10 +21,13 @@ EXPORT_FIELDS = [
     "notes", "summary", "steam_appid",
 ]
 
+# CLZ exports leave Platform empty for hardware and accessories.
+UNKNOWN_PLATFORM = "Sin plataforma"
+
 ALIASES = {
     "title": ["title", "name", "game", "titulo", "nombre", "juego"],
     "platform": ["platform", "plataforma", "system", "sistema", "console", "consola"],
-    "format": ["format", "formato", "media", "medium", "type", "tipo"],
+    "format": ["format", "formato", "media", "medium"],
     "status": ["status", "estado", "collection status", "owned"],
     "completion": ["completion", "progreso", "progress", "completed", "played", "played status"],
     "store": ["store", "tienda", "launcher", "purchase store", "storefront"],
@@ -169,7 +172,7 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
             skipped += 1
             continue
         try:
-            platform_name = values.get("platform") or "PC"
+            platform_name = values.get("platform") or UNKNOWN_PLATFORM
             platform = platforms.get(platform_name.lower())
             if not platform:
                 platform = Platform(name=platform_name[:100])

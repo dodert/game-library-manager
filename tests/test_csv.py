@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -76,3 +78,19 @@ def test_missing_title_column(client):
 ])
 def test_parse_price(raw, expected):
     assert _parse_price(raw) == expected
+
+
+def test_clz_export_sample(client):
+    """Real CLZ Games export header and rows (hardware/accessories with no platform)."""
+    text = (Path(__file__).parent / "fixtures" / "clz_sample.csv").read_text(encoding="utf-8")
+    res = upload(client, text).json()
+    assert res["imported"] == 5 and res["skipped"] == 0 and res["errors"] == []
+    assert "Type" in res["unmapped_columns"] and "Format" not in res["unmapped_columns"]
+    games = {g["title"]: g for g in client.get("/api/games").json()["items"]}
+    stick = games["Arcade Stick 8Bitdo"]
+    assert stick["platform"]["name"] == "Sin plataforma"
+    assert stick["purchase_price"] == 84.95 and stick["purchase_date"] == "2021-09-16"
+    assert stick["store"] == "xtralife.com" and stick["barcode"] == "6922621501350"
+    assert stick["status"] == "owned" and stick["completion"] == "unplayed" and stick["format"] == "physical"
+    assert games["Game & Watch Super Mario Bros"]["purchase_date"] is None
+    assert games["Figura Amiibo Link The Legend of Zelda: Tears of the Kingdom"]["release_year"] == 2023
