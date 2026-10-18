@@ -20,6 +20,12 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ARG VERSION=dev
+ARG GIT_SHA=""
+ARG GIT_REF=""
+ARG BUILD_DATE=""
+ENV GIT_SHA=${GIT_SHA} \
+    GIT_REF=${GIT_REF} \
+    BUILD_DATE=${BUILD_DATE}
 LABEL org.opencontainers.image.title="Game Library Manager" \
       org.opencontainers.image.description="Self-hosted video game collection manager with cover art" \
       org.opencontainers.image.source="https://github.com/dodert/game-library-manager" \

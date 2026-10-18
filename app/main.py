@@ -6,9 +6,9 @@ from pathlib import Path
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -92,6 +92,17 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     @app.get("/api/health")
     def health():
         return {"status": "ok", "version": __version__}
+
+    @app.get("/api/about")
+    def about(db: Session = Depends(get_db)):
+        return {
+            "version": __version__,
+            "commit": settings.git_sha or None,
+            "ref": settings.git_ref or None,
+            "build_date": settings.build_date or None,
+            "database": engine.dialect.name,
+            "schema": db.scalar(text("SELECT version_num FROM alembic_version")),
+        }
 
     @app.get("/api/platforms", response_model=list[PlatformOut])
     def list_platforms(db: Session = Depends(get_db)):
@@ -321,9 +332,13 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     app.mount("/covers", StaticFiles(directory=covers_dir), name="covers")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    # Version the asset URLs so browsers fetch the new JS/CSS after an image update
+    asset_version = f"{__version__}-{settings.git_sha[:7]}" if settings.git_sha else __version__
+    index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
+
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(STATIC_DIR / "index.html")
+        return HTMLResponse(index_html, headers={"Cache-Control": "no-cache"})
 
     return app
 
