@@ -105,3 +105,7 @@ pytest
 If this app is useful to you, you can support its development with a coffee on Ko-fi. Thank you!
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/dodert)
+
+## License
+
+[MIT](LICENSE)

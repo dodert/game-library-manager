@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>Unraid templates by dodert. Game Library Manager: a self-hosted catalogue for your video game and hardware collection, with covers and data from IGDB, SteamGridDB, Steam and ScreenScraper. Report problems or ask for help in the project's GitHub issues.</Profile>
+  <Icon>https://raw.githubusercontent.com/dodert/unraid-templates/main/icon.png</Icon>
+  <WebPage>https://github.com/dodert/game-library-manager</WebPage>
+  <DonateLink>https://ko-fi.com/dodert</DonateLink>
+  <DonateText>Support development on Ko-fi</DonateText>
+</CommunityApplications>
