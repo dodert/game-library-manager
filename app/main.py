@@ -14,8 +14,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
 from .config import Settings, settings as default_settings
-from .db import Base, make_engine, make_sessionmaker
+from .db import make_engine, make_sessionmaker
 from .images import IMAGE_TYPES, ImageError, fetch_image, save_first_cover
+from .migrate import upgrade_database
 from .models import Game, GameFormat, GameStatus, Platform
 from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider
 from .providers.steam import cover_candidates as steam_cover_candidates
@@ -39,7 +40,7 @@ SORT_FIELDS = {
 def create_app(settings: Settings = default_settings, http_client: httpx.AsyncClient | None = None) -> FastAPI:
     engine = make_engine(settings.resolved_database_url)
     SessionLocal = make_sessionmaker(engine)
-    Base.metadata.create_all(engine)
+    upgrade_database(engine)
     with SessionLocal() as db:
         seed_platforms(db)
     covers_dir = settings.covers_dir

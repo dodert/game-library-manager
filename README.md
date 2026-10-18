@@ -8,8 +8,26 @@ Work in progress. Roadmap:
 
 1. ✅ Core app: FastAPI backend, web UI, SQLite by default (PostgreSQL optional).
 2. ✅ Covers & metadata: IGDB, SteamGridDB, Steam, ScreenScraper.
-3. Docker image (amd64/arm64) on GHCR, docker-compose and Unraid template.
+3. ✅ Docker image (amd64/arm64) on GHCR, docker-compose and Unraid template.
 4. CLZ-style extras: CSV import, stats, wishlist, loans.
+
+## Docker
+
+Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` (`latest`) and on `v*` tags (`1.2.3`, `1.2`).
+
+```bash
+docker run -d --name game-library-manager -p 8000:8000 \
+  -v /path/to/data:/data -e PUID=1000 -e PGID=1000 \
+  ghcr.io/dodert/game-library-manager:latest
+```
+
+Or use [`docker-compose.yml`](docker-compose.yml). Everything lives in `/data` (SQLite database and covers). The container runs as `PUID`:`PGID` (default `99:100`, Unraid's `nobody:users`). The database schema is migrated automatically on start.
+
+## Unraid
+
+1. Copy [`unraid/game-library-manager.xml`](unraid/game-library-manager.xml) to `/boot/config/plugins/dockerMan/templates-user/my-game-library-manager.xml` on the server.
+2. In **Docker → Add Container**, pick `game-library-manager` from the template list.
+3. Fill in the provider keys you have and click **Apply**. Data goes to `/mnt/user/appdata/game-library-manager`.
 
 ## Run locally
 
@@ -23,6 +41,9 @@ DATA_DIR=./data uvicorn app.main:create_app --factory --reload
 
 | Variable | Default | Description |
 |---|---|---|
+| `PUID` / `PGID` | `99` / `100` | (Docker) user and group the app runs as |
+| `TZ` | `Etc/UTC` | (Docker) time zone |
+| `PORT` | `8000` | (Docker) port inside the container |
 | `DATA_DIR` | `/data` | Database (SQLite), covers and other data |
 | `DATABASE_URL` | *(empty)* | Leave empty for SQLite in `DATA_DIR/library.db`. For PostgreSQL: `postgresql+psycopg://user:pass@host:5432/games` |
 
