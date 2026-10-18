@@ -11,7 +11,7 @@
   <Overview>Self-hosted video game collection manager (physical and digital, every console and PC) with cover art and metadata from IGDB, SteamGridDB, Steam and ScreenScraper. SQLite by default, PostgreSQL optional.</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI>http://[IP]:[PORT:8000]/</WebUI>
-  <TemplateURL/>
+  <TemplateURL>https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml</TemplateURL>
   <Config Name="WebUI port" Target="8000" Default="8000" Mode="tcp" Description="Web interface port" Type="Port" Display="always" Required="true" Mask="false">8000</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/game-library-manager" Mode="rw" Description="Database and covers" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/game-library-manager</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User id the app runs as" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
