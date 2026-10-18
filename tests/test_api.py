@@ -115,7 +115,7 @@ def test_reset_library(client, tmp_path):
 
 
 def test_image_version_overrides_package_version(tmp_path):
-    client = TestClient(create_app(Settings(data_dir=tmp_path, app_version="0.5.31")))
-    assert client.get("/api/about").json()["version"] == "0.5.31"
-    assert client.get("/api/health").json()["version"] == "0.5.31"
-    assert "/static/app.js?v=0.5.31" in client.get("/").text
+    client = TestClient(create_app(Settings(data_dir=tmp_path, app_version="0.5.0-feat-bulk-scrape.27")))
+    assert client.get("/api/about").json()["version"] == "0.5.0-feat-bulk-scrape.27"
+    assert client.get("/api/health").json()["version"] == "0.5.0-feat-bulk-scrape.27"
+    assert "/static/app.js?v=0.5.0-feat-bulk-scrape.27" in client.get("/").text

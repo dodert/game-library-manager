@@ -18,9 +18,9 @@ Work in progress. Roadmap:
 
 ## Docker
 
-Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` and on `v*` git tags. Every build gets its own version number: `X.Y` from `__version__` in `app/__init__.py` plus the CI run number (e.g. `0.5.31`); the footer shows it. A push to `main` is tagged `latest`, that version, `X.Y` and `sha-<commit>`. Pin a version tag in Unraid if you don't want to follow `latest`. Bump `X.Y` in `__version__` for new features.
+Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` and on `v*` git tags. Versions follow [SemVer](https://semver.org): `main` builds are the release version in `app/__init__.py` (`__version__`, e.g. `0.5.0`), so bump it in every PR (`Z` for fixes, `Y` for features). A push to `main` is tagged `latest`, `X.Y.Z`, `X.Y` and `sha-<commit>`. Pin a version tag in Unraid if you don't want to follow `latest`. The footer shows the version.
 
-To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`), and also as `pre-release` and its own version number (e.g. `0.5.27`) when the branch is not `main`; set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
+To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`), and also as `pre-release` and a SemVer pre-release version `X.Y.Z-<branch>.<run>` (e.g. `0.5.0-feat-bulk-scrape.27`) when the branch is not `main`; pre-releases sort below the release and never take a `main` number; set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
 
 ```bash
 docker run -d --name game-library-manager -p 8000:8000 \

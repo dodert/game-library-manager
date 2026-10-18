@@ -39,14 +39,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Every build gets its own version: X.Y from app/__init__.py + the CI run number
-      # (e.g. 0.5.27), so a later main build never reuses a branch build's number
+      # SemVer: main builds are the release version from app/__init__.py (e.g. 0.5.0);
+      # any other branch gets a pre-release of it, X.Y.Z-<branch>.<run> (e.g. 0.5.0-feat-bulk-scrape.27),
+      # which sorts below the release and never takes a main version number
       - id: app
         run: |
           base=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' app/__init__.py)
-          minor=$(echo "$base" | cut -d. -f1,2)
-          echo "version=$minor.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "minor=$minor" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "${{ github.event.repository.default_branch }}" ] || [ "${{ github.ref_type }}" = "tag" ]; then
+            version=$base
+          else
+            slug=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+            version=$base-$slug.${{ github.run_number }}
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minor=$(echo "$base" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v6
         with:
