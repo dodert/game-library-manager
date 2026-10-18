@@ -3,7 +3,7 @@ from pathlib import Path
 
 import httpx
 
-from .providers import MetadataProvider
+from .providers import MetadataProvider, error_message
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_REDIRECTS = 3
@@ -48,7 +48,7 @@ async def save_first_cover(
         try:
             content, content_type = await fetch_image(http, provider, url)
         except (ImageError, httpx.HTTPError) as exc:
-            errors.append(str(exc) or exc.__class__.__name__)
+            errors.append(error_message(exc))
             continue
         filename = f"{game_id}-{uuid.uuid4().hex[:8]}{IMAGE_TYPES[content_type]}"
         (covers_dir / filename).write_bytes(content)
