@@ -22,7 +22,7 @@ RUN chmod +x /entrypoint.sh
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="Game Library Manager" \
       org.opencontainers.image.description="Self-hosted video game collection manager with cover art" \
-      org.opencontainers.image.source="https://github.com/dodert/game-library-manager." \
+      org.opencontainers.image.source="https://github.com/dodert/game-library-manager" \
       org.opencontainers.image.version="${VERSION}"
 
 VOLUME /data
