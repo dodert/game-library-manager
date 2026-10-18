@@ -112,6 +112,18 @@ def _decode(raw: bytes) -> str:
     return raw.decode("latin-1")
 
 
+def _detect_delimiter(text: str) -> str:
+    """Pick the separator from the header row only.
+
+    csv.Sniffer looks at a whole sample, and long multi-line descriptions full of commas,
+    quotes and HTML (as in CLZ exports) can make it guess wrong or give up.
+    """
+    header = text.split("\n", 1)[0]
+    counts = {d: header.count(d) for d in (";", ",", "\t")}
+    best = max(counts, key=counts.get)
+    return best if counts[best] else ","
+
+
 def _parse_format(value: str, default: GameFormat) -> GameFormat:
     v = _norm(value)
     if not v:
@@ -192,13 +204,15 @@ def _parse_price(value: str) -> float | None:
     return float(value)
 
 
-def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplicates: bool = True) -> dict:
+DELIMITERS = {"semicolon": ";", "comma": ",", "tab": "\t"}
+
+
+def import_csv(
+    db: Session, raw: bytes, default_format: GameFormat, skip_duplicates: bool = True, delimiter: str = "auto"
+) -> dict:
     text = _decode(raw)
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
-    except csv.Error:
-        dialect = csv.excel
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+    sep = DELIMITERS.get(delimiter) or _detect_delimiter(text)
+    reader = csv.DictReader(io.StringIO(text), delimiter=sep, quotechar='"', doublequote=True)
     headers = reader.fieldnames or []
     mapping: dict[str, str] = {}
     unmapped = []

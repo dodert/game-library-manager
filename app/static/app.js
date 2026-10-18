@@ -228,21 +228,35 @@ $("#delete-btn").addEventListener("click", async () => {
 $("#lookup-btn").addEventListener("click", lookup);
 document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
-$("#csv-import-btn").addEventListener("click", () => $("#csv-file").click());
-$("#csv-file").addEventListener("change", async (ev) => {
-  const file = ev.target.files[0];
-  ev.target.value = "";
-  if (!file) return;
-  const digital = confirm("¿Los juegos sin columna de formato son digitales?\nAceptar = digital · Cancelar = físico");
-  const body = new FormData();
-  body.append("file", file);
-  body.append("default_format", digital ? "digital" : "physical");
+const IMPORT_PREFS = "glm-import-prefs";
+$("#csv-import-btn").addEventListener("click", () => {
+  const form = $("#import-form");
+  form.reset();
+  try {
+    const prefs = JSON.parse(localStorage.getItem(IMPORT_PREFS) || "{}");
+    for (const key of ["delimiter", "default_format"]) if (prefs[key]) form.elements[key].value = prefs[key];
+  } catch { /* storage unavailable */ }
+  $("#import-dlg").showModal();
+});
+$("#import-cancel").addEventListener("click", () => $("#import-dlg").close());
+$("#import-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const body = new FormData(form);
+  try {
+    localStorage.setItem(IMPORT_PREFS, JSON.stringify({
+      delimiter: body.get("delimiter"), default_format: body.get("default_format"),
+    }));
+  } catch { /* storage unavailable */ }
+  $("#import-dlg").close();
   try {
     const r = await api("/api/import/csv", { method: "POST", body });
     let msg = `${r.imported} importados, ${r.skipped} omitidos (duplicados o sin título).`;
     if (r.errors.length) msg += `\n\nErrores:\n` + r.errors.slice(0, 10).map((e) => `Fila ${e.row}: ${e.message}`).join("\n");
     if (r.unmapped_columns.length) msg += `\n\nColumnas ignoradas: ${r.unmapped_columns.join(", ")}`;
     alert(msg);
+    $("#f-platform").length = 1;
+    await loadPlatforms();
     refresh();
   } catch (err) {
     alert(err.message);

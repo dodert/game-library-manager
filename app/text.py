@@ -10,6 +10,9 @@ def clean_html(value: str | None) -> str | None:
     """Plain text from text that may carry HTML (CLZ descriptions, provider synopses)."""
     if not value:
         return value
+    if _TAG.search(value):
+        # Like a browser: raw line breaks are just spaces, only tags break lines
+        value = re.sub(r"\s*\n\s*", " ", value)
     if "<" in value or "&" in value:
         value = _BREAK.sub("\n", value)
         value = _ITEM.sub("• ", value)

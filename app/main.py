@@ -3,6 +3,7 @@ import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -372,12 +373,13 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         file: UploadFile = File(...),
         default_format: GameFormat = Form(GameFormat.physical),
         skip_duplicates: bool = Form(True),
+        delimiter: Literal["auto", "semicolon", "comma", "tab"] = Form("auto"),
         db: Session = Depends(get_db),
     ):
         raw = file.file.read(MAX_CSV_BYTES + 1)
         if len(raw) > MAX_CSV_BYTES:
             raise HTTPException(413, "CSV too large")
-        return import_csv(db, raw, default_format, skip_duplicates)
+        return import_csv(db, raw, default_format, skip_duplicates, delimiter)
 
     app.mount("/covers", StaticFiles(directory=covers_dir), name="covers")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
