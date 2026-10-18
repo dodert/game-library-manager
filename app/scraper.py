@@ -21,6 +21,7 @@ from .images import ImageError, save_first_cover
 from .models import Game
 from .providers import MetadataProvider, SearchResult
 from .providers.steam import cover_candidates as steam_cover_candidates
+from .text import clean_html
 
 # Preferred source when two results match equally well
 PROVIDER_ORDER = ["igdb", "screenscraper", "steamgriddb", "steam"]
@@ -151,7 +152,7 @@ class Scraper:
                 best = matches[0] if matches else None
                 if best:
                     if not game.summary:
-                        game.summary = next((r.summary for r in matches if r.summary), None)
+                        game.summary = clean_html(next((r.summary for r in matches if r.summary), None))
                     if not game.release_year:
                         game.release_year = next((r.release_year for r in matches if r.release_year), None)
                 if matches or cover:

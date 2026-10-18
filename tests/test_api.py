@@ -97,3 +97,18 @@ def test_about_and_versioned_assets(tmp_path):
     page = client.get("/")
     assert page.headers["cache-control"] == "no-cache"
     assert f"/static/app.js?v={__version__}-de2880a" in page.text and "{{" not in page.text
+
+
+def test_reset_library(client, tmp_path):
+    pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+    game = client.post("/api/games", json={"title": "Ico", "platform_id": pc, "format": "physical"}).json()
+    client.put(f"/api/games/{game['id']}/cover", files={"file": ("c.png", PNG_1PX, "image/png")})
+    client.post("/api/platforms", json={"name": "Sin plataforma"})
+    seeded = len(client.get("/api/platforms").json()) - 1
+
+    assert client.post("/api/reset", json={"confirm": "si"}).status_code == 400
+    res = client.post("/api/reset", json={"confirm": "BORRAR"}).json()
+    assert res == {"games_deleted": 1, "platforms_deleted": 1}
+    assert client.get("/api/games").json()["total"] == 0
+    assert len(client.get("/api/platforms").json()) == seeded
+    assert not any((tmp_path / "covers").iterdir())

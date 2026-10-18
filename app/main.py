@@ -23,10 +23,10 @@ from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider,
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     CoverFetchIn, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
-    ProviderOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
+    ProviderOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
 from .scraper import Scraper
-from .seed import seed_platforms
+from .seed import DEFAULT_PLATFORMS, seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
 ALLOWED_COVER_TYPES = IMAGE_TYPES
@@ -337,6 +337,27 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             "total_spent": round(db.scalar(select(func.coalesce(func.sum(Game.purchase_price), 0)).where(collection)) or 0, 2),
             "loaned": db.scalar(select(func.count(Game.id)).where(Game.status == GameStatus.lent)),
         }
+
+    @app.post("/api/reset", response_model=ResetOut)
+    def reset_library(data: ResetIn, db: Session = Depends(get_db)):
+        """Delete every game, its cover and the platforms the user or an import added."""
+        if data.confirm != "BORRAR":
+            raise HTTPException(400, 'Send {"confirm": "BORRAR"} to delete the whole library')
+        if scraper.status.running:
+            raise HTTPException(409, "A cover lookup is running; cancel it first")
+        games = db.scalars(select(Game)).all()
+        for game in games:
+            if game.cover_path:
+                (covers_dir / game.cover_path).unlink(missing_ok=True)
+            db.delete(game)
+        db.flush()
+        defaults = {name for name, _ in DEFAULT_PLATFORMS}
+        extra = db.scalars(select(Platform).where(Platform.name.not_in(defaults))).all()
+        for platform in extra:
+            db.delete(platform)
+        db.commit()
+        seed_platforms(db)
+        return ResetOut(games_deleted=len(games), platforms_deleted=len(extra))
 
     @app.get("/api/export/csv")
     def export(db: Session = Depends(get_db)):

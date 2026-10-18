@@ -329,6 +329,26 @@ $("#scrape-dlg-cancel").addEventListener("click", () => $("#scrape-dlg").close()
 $("#scrape-cancel").addEventListener("click", async () => renderScrape(await api("/api/scrape/cancel", { method: "POST" })));
 $("#scrape-close").addEventListener("click", () => { $("#scrape-bar").hidden = true; });
 
+$("#reset-btn").addEventListener("click", async () => {
+  const answer = prompt(
+    "Se borrarán TODOS los juegos, sus carátulas y las plataformas añadidas. No se puede deshacer.\n" +
+    "Si quieres una copia, cancela y usa antes «Exportar CSV».\n\nEscribe BORRAR para confirmar:"
+  );
+  if (answer === null) return;
+  if (answer.trim().toUpperCase() !== "BORRAR") { alert("No se ha borrado nada."); return; }
+  try {
+    const r = await api("/api/reset", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "BORRAR" }),
+    });
+    alert(`Biblioteca vacía: ${r.games_deleted} juegos y ${r.platforms_deleted} plataformas añadidas borrados.`);
+    $("#f-platform").length = 1;
+    await loadPlatforms();
+    refresh();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 async function loadAbout() {
   const a = await api("/api/about");
   const commit = a.commit

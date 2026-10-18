@@ -13,6 +13,7 @@ from datetime import date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from .text import clean_html
 from .models import CompletionStatus, Game, GameFormat, GameStatus, Platform
 
 EXPORT_FIELDS = [
@@ -219,7 +220,7 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
     imported, skipped, errors = 0, 0, []
     for line, row in enumerate(reader, start=2):
         values = {field: (row.get(header) or "").strip() for header, field in mapping.items()}
-        title = values.get("title", "")
+        title = clean_html(values.get("title", "")) or ""
         if not title:
             skipped += 1
             continue
@@ -251,7 +252,7 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
                 "rating": min(rating, 10) if rating else None,
             }
             for field in TEXT_FIELDS:
-                fields[field] = values.get(field, "")[:TEXT_LIMITS[field]] or None
+                fields[field] = (clean_html(values.get(field, "")) or "")[:TEXT_LIMITS[field]] or None
             for field in DATE_FIELDS:
                 fields[field] = _parse_date(values.get(field, ""))
             for field in PRICE_FIELDS:

@@ -121,3 +121,14 @@ def test_collector_fields_round_trip(client, tmp_path):
     for key, value in data.items():
         if key != "platform_id":
             assert game[key] == value, key
+
+
+def test_import_strips_html(client):
+    text = (
+        'Title;Platform;Description;Notes\n'
+        '"Game &amp; Watch";Nintendo Switch;"<p>Primera l&iacute;nea<br>Segunda <b>parte</b></p>";"<i>nota</i>"\n'
+    )
+    assert upload(client, text).json()["imported"] == 1
+    game = client.get("/api/games").json()["items"][0]
+    assert game["title"] == "Game & Watch"
+    assert game["summary"] == "Primera línea\nSegunda parte" and game["notes"] == "nota"

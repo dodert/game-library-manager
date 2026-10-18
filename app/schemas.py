@@ -182,3 +182,12 @@ class ScrapeStatusOut(BaseModel):
     never_scraped: int
     library_total: int
     providers: list[str]
+
+
+class ResetIn(BaseModel):
+    confirm: str
+
+
+class ResetOut(BaseModel):
+    games_deleted: int
+    platforms_deleted: int

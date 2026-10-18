@@ -14,7 +14,7 @@ Work in progress. Roadmap:
 ## Import / export
 
 - **Exportar CSV** downloads the whole library (`/api/export/csv`).
-- **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Comma, semicolon or tab separated; UTF-8 or Windows-1252. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
+- **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Comma, semicolon or tab separated; UTF-8 or Windows-1252. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. HTML in imported text (CLZ descriptions often carry `<p>`, `<br>`, `&amp;`…) is converted to plain text. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
 
 ## Docker
 
@@ -51,6 +51,8 @@ mkdir -p /boot/config/plugins/community.applications/private/dodert && curl -fsS
 ## Covers for imported games
 
 **Buscar carátulas** looks every game up in the enabled providers (IGDB, ScreenScraper, SteamGridDB and Steam, best match by title and platform) and downloads the cover. It fills the description and year only where they are empty. Choose **Solo los que nunca se han buscado** to cover games added since the last run (for example after a CSV import), or **Todos** to search the whole library again and replace existing covers. It runs in the background with a progress bar; games with no match are marked "Sin resultados" in their card's dialog. `SCRAPE_DELAY` (seconds between games, default `0.5`) keeps it inside the providers' rate limits.
+
+**Borrar todo** empties the library (games, covers and the platforms added by you or an import) after you type `BORRAR`. Export a CSV first if you want a copy.
 
 ## Run locally
 
