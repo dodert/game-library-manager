@@ -29,6 +29,8 @@ class GameBase(BaseModel):
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
+    summary: str | None = None
+    steam_appid: int | None = None
 
 
 class GameIn(GameBase):
@@ -49,6 +51,8 @@ class GameUpdate(BaseModel):
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
+    summary: str | None = None
+    steam_appid: int | None = None
 
 
 class GameOut(GameBase):
@@ -63,3 +67,36 @@ class GameOut(GameBase):
 class GamePage(BaseModel):
     total: int
     items: list[GameOut]
+
+
+class ProviderOut(BaseModel):
+    name: str
+    label: str
+    enabled: bool
+    can_import: bool = False
+
+
+class MetadataResult(BaseModel):
+    provider: str
+    external_id: str
+    title: str
+    release_year: int | None = None
+    platforms: list[str] = []
+    summary: str | None = None
+    cover_urls: list[str] = []
+    thumb_url: str | None = None
+
+
+class MetadataSearchOut(BaseModel):
+    results: list[MetadataResult]
+    errors: dict[str, str]
+
+
+class CoverFetchIn(BaseModel):
+    provider: str
+    urls: list[str] = Field(min_length=1, max_length=10)
+
+
+class SteamImportOut(BaseModel):
+    imported: int
+    skipped: int

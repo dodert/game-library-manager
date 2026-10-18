@@ -10,6 +10,7 @@
   <header>
     <h1>🎮 Mi biblioteca</h1>
     <div id="stats"></div>
+    <button id="steam-import-btn" hidden>Importar Steam</button>
     <button id="add-btn">+ Añadir juego</button>
   </header>
 
@@ -43,7 +44,16 @@
     <form id="game-form" method="dialog">
       <h2 id="dlg-title">Añadir juego</h2>
       <input type="hidden" name="id">
-      <label>Título <input name="title" required></label>
+      <input type="hidden" name="steam_appid">
+      <div class="row title-row">
+        <label>Título <input name="title" required></label>
+        <button type="button" id="lookup-btn">Buscar en internet</button>
+      </div>
+      <div id="lookup" hidden>
+        <div id="lookup-status"></div>
+        <div id="lookup-results"></div>
+      </div>
+      <div id="cover-preview" hidden><img alt=""><span></span></div>
       <label>Plataforma <select name="platform_id" required></select></label>
       <div class="row">
         <label>Formato
@@ -82,7 +92,8 @@
         <label>Fecha compra <input name="purchase_date" type="date"></label>
         <label>Precio <input name="purchase_price" type="number" step="0.01" min="0"></label>
       </div>
-      <label>Notas <textarea name="notes" rows="3"></textarea></label>
+      <label>Descripción <textarea name="summary" rows="3"></textarea></label>
+      <label>Notas <textarea name="notes" rows="2"></textarea></label>
       <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
       <menu>
         <button type="button" id="delete-btn" class="danger" hidden>Eliminar</button>

@@ -11,6 +11,17 @@ class Settings(BaseSettings):
     # postgresql+psycopg://user:pass@host:5432/games
     database_url: str = ""
 
+    # Metadata / cover providers. Each one is enabled when its credentials are set.
+    igdb_client_id: str = ""
+    igdb_client_secret: str = ""
+    steamgriddb_api_key: str = ""
+    steam_api_key: str = ""
+    steam_id: str = ""
+    screenscraper_dev_id: str = ""
+    screenscraper_dev_password: str = ""
+    screenscraper_user: str = ""
+    screenscraper_password: str = ""
+
     @property
     def resolved_database_url(self) -> str:
         if self.database_url:
