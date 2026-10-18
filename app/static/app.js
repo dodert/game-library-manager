@@ -170,16 +170,59 @@ function setTab(name) {
 const PAGE_SIZE = 60;
 const list = { loaded: 0, total: 0, gen: 0, loading: false };
 
+const VIEWS = ["grid", "list", "table"];
+let view = "grid";
+try { if (VIEWS.includes(localStorage.getItem("glm-view"))) view = localStorage.getItem("glm-view"); } catch {}
+
+const badges = (g) =>
+  `<span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}`;
+
 const cardHtml = (g) => `
     <article class="card" data-id="${g.id}">
       <div class="cover">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "🎮"}</div>
       <div class="info">
         <div class="title">${esc(g.title)}</div>
         <div class="meta">${esc(g.platform.name)}${g.release_year ? " · " + g.release_year : ""}</div>
-        <span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
+        <span>${badges(g)}</span>
         ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
     </article>`;
+
+const TABLE_HEAD = `<table class="games"><thead><tr>
+    <th></th><th>Título</th><th>Plataforma</th><th>Año</th><th>Formato</th><th>Estado</th><th>Progreso</th>
+    <th>Tienda</th><th>Fecha compra</th><th>Precio</th><th>Nota</th>
+  </tr></thead><tbody></tbody></table>`;
+
+const rowHtml = (g) => `
+    <tr data-id="${g.id}">
+      <td class="c">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "<span>🎮</span>"}</td>
+      <td class="t">${esc(g.title)}${g.item_type ? ` <span class="badge">${esc(g.item_type)}</span>` : ""}</td>
+      <td>${esc(g.platform.name)}</td>
+      <td class="num">${g.release_year ?? ""}</td>
+      <td>${FORMAT[g.format]}</td>
+      <td>${STATUS[g.status]}${g.loaned_to ? ` → ${esc(g.loaned_to)}` : ""}</td>
+      <td>${COMPLETION[g.completion] ?? ""}</td>
+      <td>${esc(g.store)}</td>
+      <td class="num">${esc(g.purchase_date)}</td>
+      <td class="num">${g.purchase_price != null ? money(g.purchase_price) : ""}</td>
+      <td class="num">${g.rating != null ? `${g.rating}/10` : ""}</td>
+    </tr>`;
+
+// Where the next page of games is appended, and how each game is drawn, for the current view
+const listTarget = () => (view === "table" ? $("#grid tbody") : $("#grid"));
+const itemHtml = (g) => (view === "table" ? rowHtml(g) : cardHtml(g));
+
+function resetGrid() {
+  $("#grid").className = `grid ${view === "grid" ? "" : view}`.trim();
+  $("#grid").innerHTML = view === "table" ? TABLE_HEAD : "";
+}
+
+function setView(name) {
+  view = name;
+  try { localStorage.setItem("glm-view", name); } catch {}
+  document.querySelectorAll(".views [data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === name)));
+  loadGames(true);
+}
 
 function listParams() {
   const params = new URLSearchParams();
@@ -214,7 +257,7 @@ async function loadMore() {
     params.set("offset", list.loaded);
     const page = await api(`/api/games?${params}`);
     if (gen !== list.gen) return;
-    $("#grid").insertAdjacentHTML("beforeend", page.items.map(cardHtml).join(""));
+    listTarget().insertAdjacentHTML("beforeend", page.items.map(itemHtml).join(""));
     list.loaded += page.items.length;
     list.total = page.total;
     $("#empty").hidden = page.total > 0;
@@ -235,7 +278,7 @@ async function loadGames(keep = false) {
   list.loaded = 0;
   list.total = 0;
   list.loading = false;
-  $("#grid").innerHTML = "";
+  resetGrid();
   await loadMore();
   while (list.loaded < Math.min(target, list.total) && !list.loading) {
     const before = list.loaded;
@@ -393,7 +436,7 @@ $("#steam-import-btn").addEventListener("click", async () => {
 $("#cancel-btn").addEventListener("click", () => $("#dlg").close());
 $("#add-btn").addEventListener("click", () => openDialog(null));
 $("#grid").addEventListener("click", async (ev) => {
-  const card = ev.target.closest(".card");
+  const card = ev.target.closest("[data-id]");
   if (card) openDialog(await api(`/api/games/${card.dataset.id}`));
 });
 
@@ -401,6 +444,10 @@ let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadGames(), 250); });
 for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", () => loadGames());
 $("#more-btn").addEventListener("click", loadMore);
+document.querySelectorAll(".views [data-view]").forEach((b) => {
+  b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  b.addEventListener("click", () => setView(b.dataset.view));
+});
 
 let scrapePoll = null;
 
