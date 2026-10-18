@@ -35,6 +35,12 @@ The `Sync Unraid template` workflow publishes the template to the public repo [d
 2. In **Docker → Add Container**, pick `game-library-manager` from the template list.
 3. Fill in the provider keys you have and click **Apply**. Data goes to `/mnt/user/appdata/game-library-manager`.
 
+To list it in **Apps → Private** (Community Applications) instead, download it to CA's private folder:
+
+```bash
+mkdir -p /boot/config/plugins/community.applications/private/dodert && curl -fsSL https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml -o /boot/config/plugins/community.applications/private/dodert/game-library-manager.xml
+```
+
 ## Run locally
 
 ```bash
