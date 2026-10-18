@@ -11,6 +11,12 @@ Work in progress. Roadmap:
 3. ✅ Docker image (amd64/arm64) on GHCR, docker-compose and Unraid template.
 4. ✅ CLZ-style extras: CSV import, stats, wishlist, loans.
 
+## Languages
+
+The interface is in English by default and also in Spanish. Change it in **⚙ Settings → Language**; the choice is saved in that browser.
+
+To add a language, copy `app/static/i18n/en.json` to `app/static/i18n/<code>.json` (for example `fr.json`), set `"_name"` to the language's own name (`"Français"`) and translate the values, keeping placeholders such as `{n}` as they are. It shows up in Settings with no other change; any text left out falls back to English. `tests/test_i18n.py` checks that every language has all the texts and placeholders.
+
 ## Import / export
 
 - **Exportar CSV** downloads the whole library (`/api/export/csv`).

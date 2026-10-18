@@ -86,7 +86,7 @@ def test_cover_upload(client, tmp_path):
 def test_index_served(client):
     res = client.get("/")
     assert res.status_code == 200
-    assert "Mi biblioteca" in res.text
+    assert "My library" in res.text
 
 
 def test_about_and_versioned_assets(tmp_path):

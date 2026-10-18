@@ -1,7 +1,5 @@
 const $ = (sel) => document.querySelector(sel);
-const FORMAT = { physical: "Físico", digital: "Digital" };
 const SKIP_FIELDS = new Set(["cover", "id"]);
-const STATUS = { owned: "En colección", wishlist: "Wishlist", lent: "Prestado", sold: "Vendido" };
 
 const api = async (path, opts = {}) => {
   const res = await fetch(path, opts);
@@ -12,7 +10,6 @@ const api = async (path, opts = {}) => {
 let providers = [];
 let tab = "collection";
 const TAB_STATUS = { collection: ["owned", "lent"], wishlist: ["wishlist"], lent: ["lent"], sold: ["sold"] };
-const COMPLETION = { unplayed: "Sin jugar", playing: "Jugando", completed: "Completado", abandoned: "Abandonado" };
 let pendingCover = null; // {provider, urls, thumb} chosen from an online search
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -71,14 +68,14 @@ const lookupProviders = () => [...document.querySelectorAll("#lookup-providers i
 
 function providerQuery() {
   const selected = lookupProviders();
-  if (!selected.length) throw new Error("Elige al menos una fuente");
+  if (!selected.length) throw new Error(t("error.pick_source"));
   return selected.map((name) => `&provider=${encodeURIComponent(name)}`).join("");
 }
 
 $("#lookup-opts").addEventListener("change", () =>
   saveSourcePrefs(lookupProviders(), $("#use-cover").checked, $("#use-details").checked));
 
-// What the online searches look for: the "Buscar como" text when filled, else the title
+// What the online searches look for: the "Search as" text when filled, else the title
 function searchText() {
   const f = $("#game-form").elements;
   return f.search_title.value.trim() || f.title.value.trim();
@@ -89,21 +86,21 @@ async function lookup() {
   if (!title) return;
   $("#lookup").hidden = false;
   $("#lookup-results").innerHTML = "";
-  $("#lookup-status").textContent = "Buscando…";
+  $("#lookup-status").textContent = t("lookup.searching");
   try {
     const { results, errors } = await api(`/api/metadata/search?q=${encodeURIComponent(title)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
     const active = lookupProviders().map(label).join(", ");
     $("#lookup-status").textContent =
-      `${results.length} resultados (${active})` + (failed.length ? ` · Error en ${failed.join(" · ")}` : "");
+      t("lookup.results", { n: results.length, sources: active }) + (failed.length ? ` · ${t("lookup.failed", { errors: failed.join(" · ") })}` : "");
     $("#lookup-results").innerHTML = results.map((r, i) => {
       const thumb = proxied(r.provider, r.thumb_url || r.cover_urls[0]);
       return `<div class="result" data-i="${i}">
         ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : `<div class="noimg"></div>`}
         <div>
           <div class="r-title">${esc(r.title)}${r.release_year ? ` (${r.release_year})` : ""}</div>
-          <div class="r-meta">${esc(label(r.provider))}${r.platforms.length ? " · " + esc(r.platforms.join(", ")) : ""}${r.cover_urls.length ? "" : " · sin carátula"}</div>
+          <div class="r-meta">${esc(label(r.provider))}${r.platforms.length ? " · " + esc(r.platforms.join(", ")) : ""}${r.cover_urls.length ? "" : ` · ${t("lookup.no_cover")}`}</div>
         </div>
       </div>`;
     }).join("");
@@ -119,7 +116,7 @@ async function lookup() {
 function applyResult(r) {
   const f = $("#game-form").elements;
   if ($("#use-details").checked) {
-    // With a "Buscar como" text the title is deliberately different (an edition, a pack…): keep it
+    // With a "Search as" text the title is deliberately different (an edition, a pack…): keep it
     if (!f.search_title.value.trim()) f.title.value = r.title;
     for (const key of ["release_year", "summary", "publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
   }
@@ -127,7 +124,7 @@ function applyResult(r) {
   if ($("#use-cover").checked && r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
     showCover(proxied(r.provider, r.thumb_url || r.cover_urls[0]), proxied(r.provider, r.cover_urls[0]));
-    $("#cover-preview span").textContent = "Esta carátula se descargará al guardar";
+    $("#cover-preview span").textContent = t("cover.download_on_save");
   }
   $("#lookup").hidden = true;
 }
@@ -141,26 +138,26 @@ function showCover(src, full = src) {
 async function searchCovers() {
   const form = $("#game-form");
   const title = searchText();
-  if (!title) return alert("Escribe primero el título");
+  if (!title) return alert(t("error.title_first"));
   const platform = form.elements.platform_id.selectedOptions[0]?.textContent ?? "";
   $("#cover-picker").hidden = false;
   $("#cover-picker-grid").innerHTML = "";
-  $("#cover-picker-status").textContent = "Buscando carátulas…";
+  $("#cover-picker-status").textContent = t("cover.searching");
   try {
     const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
     const matching = options.filter((o) => o.matches).length;
     $("#cover-picker-status").textContent =
-      (options.length ? `${options.length} carátulas (${matching} del mismo título). Pulsa una para elegirla.` : "No se han encontrado carátulas.") +
-      (failed.length ? ` · Error en ${failed.join(" · ")}` : "");
+      (options.length ? t("cover.found", { n: options.length, matching }) : t("cover.none")) +
+      (failed.length ? ` · ${t("lookup.failed", { errors: failed.join(" · ") })}` : "");
     const tile = (o, i) => `<button type="button" class="cover-opt" data-i="${i}" aria-pressed="false" title="${esc(o.title)}${o.release_year ? ` (${o.release_year})` : ""} · ${esc(label(o.provider))}">
         <img src="${esc(proxied(o.provider, o.thumb_url))}" alt="" loading="lazy">
         <span>${esc(label(o.provider))} · ${esc(o.title)}</span>
       </button>`;
     const first = options.findIndex((o) => !o.matches);
     $("#cover-picker-grid").innerHTML = options.map((o, i) =>
-      (i === first && matching ? "<h4>Otros resultados</h4>" : "") + tile(o, i)).join("");
+      (i === first && matching ? `<h4>${esc(t("cover.other_results"))}</h4>` : "") + tile(o, i)).join("");
     $("#cover-picker-grid").onclick = (ev) => {
       const el = ev.target.closest(".cover-opt");
       if (!el) return;
@@ -169,22 +166,24 @@ async function searchCovers() {
       form.elements.cover.value = "";
       pendingCover = { provider: o.provider, urls: o.urls };
       showCover(proxied(o.provider, o.thumb_url), proxied(o.provider, o.urls[0]));
-      $("#cover-preview span").textContent = `Carátula de ${label(o.provider)}: se descargará al guardar`;
+      $("#cover-preview span").textContent = t("cover.from_provider", { provider: label(o.provider) });
     };
   } catch (err) {
     $("#cover-picker-status").textContent = err.message;
   }
 }
 
-const money = (n) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+const money = (n) => n.toLocaleString(i18n.lang, { style: "currency", currency: "EUR" });
 
-function bars(title, data, labels = {}) {
+// prefix: translation group for the keys (format, completion...); none = show keys as they are
+function bars(title, data, prefix = null) {
+  const name = (k) => (prefix ? t(`${prefix}.${k}`) : k);
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
   if (!entries.length) return "";
   const max = Math.max(...entries.map(([, n]) => n));
   return `<section class="panel"><h3>${esc(title)}</h3>${entries.map(([k, n]) => `
-    <div class="bar-row" title="${esc(labels[k] ?? k)}: ${n}">
-      <span class="bar-label">${esc(labels[k] ?? k)}</span>
+    <div class="bar-row" title="${esc(name(k))}: ${n}">
+      <span class="bar-label">${esc(name(k))}</span>
       <span class="bar-track"><span class="bar" style="width:${(n / max) * 100}%"></span></span>
       <span class="bar-value">${n}</span>
     </div>`).join("")}</section>`;
@@ -193,24 +192,26 @@ function bars(title, data, labels = {}) {
 async function loadStats() {
   const s = await api("/api/stats");
   $("#stats").textContent =
-    `${s.collection} en colección · ${s.by_kind.game} juegos · ${s.by_kind.hardware} hardware · ` +
-    `${s.by_format.physical ?? 0} físicos · ${s.by_format.digital ?? 0} digitales`;
+    t("stats.summary", {
+      collection: s.collection, games: s.by_kind.game, hardware: s.by_kind.hardware,
+      physical: s.by_format.physical ?? 0, digital: s.by_format.digital ?? 0,
+    });
   if (tab !== "stats") return;
   $("#stats-view").innerHTML = `
     <div class="tiles">
-      <div class="tile"><div class="tile-value">${s.collection}</div><div class="tile-label">En colección</div></div>
-      <div class="tile"><div class="tile-value">${s.by_status.wishlist ?? 0}</div><div class="tile-label">En wishlist</div></div>
-      <div class="tile"><div class="tile-value">${s.loaned}</div><div class="tile-label">Prestados</div></div>
-      <div class="tile"><div class="tile-value">${money(s.total_spent)}</div><div class="tile-label">Gastado</div></div>
+      <div class="tile"><div class="tile-value">${s.collection}</div><div class="tile-label">${esc(t("stats.in_collection"))}</div></div>
+      <div class="tile"><div class="tile-value">${s.by_status.wishlist ?? 0}</div><div class="tile-label">${esc(t("stats.in_wishlist"))}</div></div>
+      <div class="tile"><div class="tile-value">${s.loaned}</div><div class="tile-label">${esc(t("stats.lent"))}</div></div>
+      <div class="tile"><div class="tile-value">${money(s.total_spent)}</div><div class="tile-label">${esc(t("stats.spent"))}</div></div>
     </div>
     <div class="panels">
-      ${bars("Por tipo", s.by_kind, { game: "Videojuegos", hardware: "Hardware" })}
-      ${Object.keys(s.by_item_type).length ? bars("Hardware por tipo", s.by_item_type) : ""}
-      ${bars("Por plataforma", s.by_platform)}
-      ${bars("Por formato", s.by_format, FORMAT)}
-      ${bars("Progreso", s.by_completion, COMPLETION)}
+      ${bars(t("stats.by_kind"), { games: s.by_kind.game, hardware: s.by_kind.hardware }, "kind")}
+      ${Object.keys(s.by_item_type).length ? bars(t("stats.by_item_type"), s.by_item_type) : ""}
+      ${bars(t("stats.by_platform"), s.by_platform)}
+      ${bars(t("stats.by_format"), s.by_format, "format")}
+      ${bars(t("stats.by_completion"), s.by_completion, "completion")}
     </div>
-    <p class="hint">Las cifras de colección incluyen los prestados; no incluyen wishlist ni vendidos.</p>`;
+    <p class="hint">${esc(t("stats.hint"))}</p>`;
 }
 
 function setTab(name) {
@@ -232,7 +233,7 @@ let view = "grid";
 try { if (VIEWS.includes(localStorage.getItem("glm-view"))) view = localStorage.getItem("glm-view"); } catch {}
 
 const badges = (g) =>
-  `<span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}`;
+  `<span class="badge">${t(`format.${g.format}`)}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${t(`status.${g.status}`)}</span>` : ""}`;
 
 const cardHtml = (g) => `
     <article class="card" data-id="${g.id}">
@@ -245,18 +246,18 @@ const cardHtml = (g) => `
       </div>
     </article>`;
 
-// [sort key, header]; the key is the API's sort field
+// Sort keys of the API, one per column; the header is the text "column.<key>"
 const COLUMNS = [
-  ["title", "Título"], ["platform", "Plataforma"], ["release_year", "Año"], ["format", "Formato"],
-  ["status", "Estado"], ["completion", "Progreso"], ["store", "Tienda"], ["purchase_date", "Fecha compra"],
-  ["purchase_price", "Precio"], ["rating", "Nota"], ["item_type", "Tipo"],
+  "title", "platform", "release_year", "format", "status", "completion", "store", "purchase_date",
+  "purchase_price", "rating", "item_type",
 ];
 
 function tableHead() {
   const sort = $("#sort").value;
-  const th = ([key, label]) => {
+  const th = (key) => {
+    const label = esc(t(`column.${key}`));
     const dir = sort === key ? "asc" : sort === `-${key}` ? "desc" : null;
-    return `<th data-sort="${key}"${dir ? ` aria-sort="${dir === "asc" ? "ascending" : "descending"}"` : ""} title="Ordenar por ${label}">${label}${dir ? (dir === "asc" ? " ▲" : " ▼") : ""}</th>`;
+    return `<th data-sort="${key}"${dir ? ` aria-sort="${dir === "asc" ? "ascending" : "descending"}"` : ""} title="${esc(t("column.sort_by", { column: t(`column.${key}`) }))}">${label}${dir ? (dir === "asc" ? " ▲" : " ▼") : ""}</th>`;
   };
   return `<table class="games"><thead><tr><th></th>${COLUMNS.map(th).join("")}</tr></thead><tbody></tbody></table>`;
 }
@@ -270,7 +271,7 @@ function sortBy(key) {
   if (!option) {
     option = $("#sort-column") ?? select.appendChild(Object.assign(document.createElement("option"), { id: "sort-column" }));
     option.value = value;
-    option.textContent = `${COLUMNS.find(([k]) => k === key)[1]} ${value.startsWith("-") ? "▼" : "▲"}`;
+    option.textContent = `${t(`column.${key}`)} ${value.startsWith("-") ? "▼" : "▲"}`;
   }
   select.value = value;
   loadGames();
@@ -282,14 +283,14 @@ const rowHtml = (g) => `
       <td class="t">${esc(g.title)}</td>
       <td>${esc(g.platform.name)}</td>
       <td class="num">${g.release_year ?? ""}</td>
-      <td>${FORMAT[g.format]}</td>
-      <td>${STATUS[g.status]}${g.loaned_to ? ` → ${esc(g.loaned_to)}` : ""}</td>
-      <td>${COMPLETION[g.completion] ?? ""}</td>
+      <td>${t(`format.${g.format}`)}</td>
+      <td>${t(`status.${g.status}`)}${g.loaned_to ? ` → ${esc(g.loaned_to)}` : ""}</td>
+      <td>${t(`completion.${g.completion}`)}</td>
       <td>${esc(g.store)}</td>
       <td class="num">${esc(g.purchase_date)}</td>
       <td class="num">${g.purchase_price != null ? money(g.purchase_price) : ""}</td>
       <td class="num">${g.rating != null ? `${g.rating}/10` : ""}</td>
-      <td>${g.item_type ? esc(g.item_type) : "Videojuego"}</td>
+      <td>${g.item_type ? esc(g.item_type) : t("kind.game")}</td>
     </tr>`;
 
 // Where the next page of games is appended, and how each game is drawn, for the current view
@@ -325,10 +326,10 @@ function renderPager() {
   const page = Math.min(pages, Math.max(1, Math.ceil(list.loaded / PAGE_SIZE)));
   const more = list.loaded < list.total;
   $("#pager").hidden = list.total === 0 || tab === "stats";
-  $("#pager-info").textContent = `Mostrando ${list.loaded} de ${list.total} · página ${page} de ${pages}`;
+  $("#pager-info").textContent = t("list.pager", { loaded: list.loaded, total: list.total, page, pages });
   $("#more-btn").hidden = !more;
   $("#more-btn").disabled = list.loading;
-  $("#more-btn").textContent = list.loading ? "Cargando…" : "Cargar más";
+  $("#more-btn").textContent = list.loading ? t("list.loading") : t("list.more");
 }
 
 // Fetches the next page and appends it. A filter change bumps list.gen, so a page that
@@ -402,9 +403,9 @@ function openDialog(game) {
   $("#cover-picker").hidden = true;
   if (game?.cover_url) {
     showCover(game.cover_url);
-    $("#cover-preview span").textContent = "Carátula actual";
+    $("#cover-preview span").textContent = t("cover.current");
   }
-  $("#dlg-title").textContent = game ? "Editar juego" : "Añadir juego";
+  $("#dlg-title").textContent = game ? t("game.edit") : t("game.add");
   $("#delete-btn").hidden = !game;
   form.elements.id.value = game?.id ?? "";
   if (game) {
@@ -416,7 +417,7 @@ function openDialog(game) {
   showKind();
   setPane("general");
   $("#scrape-info").textContent = game?.scraped_at
-    ? `Última búsqueda online: ${game.scraped_at.slice(0, 16).replace("T", " ")}${game.scrape_error ? ` · ${game.scrape_error}` : ""}`
+    ? t("game.last_lookup", { date: game.scraped_at.slice(0, 16).replace("T", " ") }) + (game.scrape_error ? ` · ${game.scrape_error}` : "")
     : "";
   $("#dlg").showModal();
 }
@@ -458,7 +459,7 @@ $("#game-form").addEventListener("submit", async (ev) => {
           body: JSON.stringify(pendingCover),
         });
       } catch (err) {
-        alert(`Juego guardado, pero no se pudo descargar la carátula: ${err.message}`);
+        alert(t("error.cover_download", { error: err.message }));
       }
     }
     $("#dlg").close();
@@ -470,7 +471,7 @@ $("#game-form").addEventListener("submit", async (ev) => {
 
 $("#delete-btn").addEventListener("click", async () => {
   const id = $("#game-form").elements.id.value;
-  if (!confirm("¿Eliminar este juego?")) return;
+  if (!confirm(t("game.confirm_delete"))) return;
   await api(`/api/games/${id}`, { method: "DELETE" });
   $("#dlg").close();
   refresh();
@@ -483,7 +484,7 @@ $("#game-form").elements.cover.addEventListener("change", (ev) => {
   if (!file) return;
   pendingCover = null;
   showCover(URL.createObjectURL(file));
-  $("#cover-preview span").textContent = "Esta imagen se subirá al guardar";
+  $("#cover-preview span").textContent = t("cover.upload_on_save");
 });
 document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
@@ -510,9 +511,9 @@ $("#import-form").addEventListener("submit", async (ev) => {
   $("#import-dlg").close();
   try {
     const r = await api("/api/import/csv", { method: "POST", body });
-    let msg = `${r.imported} importados, ${r.skipped} omitidos (duplicados o sin título).`;
-    if (r.errors.length) msg += `\n\nErrores:\n` + r.errors.slice(0, 10).map((e) => `Fila ${e.row}: ${e.message}`).join("\n");
-    if (r.unmapped_columns.length) msg += `\n\nColumnas ignoradas: ${r.unmapped_columns.join(", ")}`;
+    let msg = t("import.result", { imported: r.imported, skipped: r.skipped });
+    if (r.errors.length) msg += `\n\n${t("import.errors")}\n` + r.errors.slice(0, 10).map((e) => t("import.row_error", { row: e.row, error: e.message })).join("\n");
+    if (r.unmapped_columns.length) msg += `\n\n${t("import.unmapped", { columns: r.unmapped_columns.join(", ") })}`;
     alert(msg);
     $("#f-platform").length = 1;
     await loadPlatforms();
@@ -522,10 +523,10 @@ $("#import-form").addEventListener("submit", async (ev) => {
   }
 });
 $("#steam-import-btn").addEventListener("click", async () => {
-  if (!confirm("¿Importar tu biblioteca de Steam? Los juegos ya importados se omiten.")) return;
+  if (!confirm(t("steam.confirm"))) return;
   try {
     const r = await api("/api/import/steam", { method: "POST" });
-    alert(`${r.imported} juegos importados, ${r.skipped} ya estaban. Las carátulas se descargan en segundo plano.`);
+    alert(t("steam.result", { imported: r.imported, skipped: r.skipped }));
     refresh();
   } catch (err) {
     alert(err.message);
@@ -563,14 +564,17 @@ function renderScrape(st) {
   const progress = bar.querySelector("progress");
   progress.max = st.total || 1;
   progress.value = st.done;
-  const counts = (st.want_covers ? `${st.covers} carátulas nuevas · ` : "") +
-    (st.want_details ? `${st.details} con datos nuevos · ` : "") +
-    `${st.found} encontrados · ${st.not_found} sin resultados` +
-    (st.failed ? ` · ${st.failed} con error` : "");
+  const counts = [
+    st.want_covers && t("scrape.new_covers", { n: st.covers }),
+    st.want_details && t("scrape.new_details", { n: st.details }),
+    t("scrape.found", { n: st.found }),
+    t("scrape.not_found", { n: st.not_found }),
+    st.failed && t("scrape.failed", { n: st.failed }),
+  ].filter(Boolean).join(" · ");
   bar.querySelector(".scrape-text").textContent = st.running
-    ? `Buscando en ${st.sources.join(", ")} ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
-    : `${st.cancelled ? "Búsqueda cancelada" : "Búsqueda terminada"}: ${st.done}/${st.total} · ${counts}` +
-      (st.errors.length ? ` · Errores: ${st.errors.slice(0, 3).join(" | ")}` : "");
+    ? `${t("scrape.running", { sources: st.sources.join(", "), done: st.done, total: st.total })}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    : `${t(st.cancelled ? "scrape.cancelled" : "scrape.finished")}: ${st.done}/${st.total} · ${counts}` +
+      (st.errors.length ? ` · ${t("scrape.errors", { errors: st.errors.slice(0, 3).join(" | ") })}` : "");
   $("#scrape-cancel").hidden = !st.running;
   $("#scrape-close").hidden = st.running;
 }
@@ -593,13 +597,13 @@ async function openScrapeDialog() {
   if (st.running) { renderScrape(st); return; }
   const enabled = providers.filter((p) => p.enabled);
   const saved = loadSourcePrefs();
-  $("#scrape-providers").innerHTML = providerChecks("provider", saved) || "Ninguna fuente activa.";
+  $("#scrape-providers").innerHTML = providerChecks("provider", saved) || esc(t("scrape.no_sources"));
   $("#scrape-providers-hint").hidden = enabled.length > 1;
   const form = $("#scrape-form").elements;
   if (saved.covers !== undefined) form.covers.checked = saved.covers;
   if (saved.details !== undefined) form.details.checked = saved.details;
-  $("#scrape-missing-label").textContent = `Solo los que nunca se han buscado (${st.never_scraped})`;
-  $("#scrape-all-label").textContent = `Todos (${st.library_total})`;
+  $("#scrape-missing-label").textContent = t("scrape.missing", { n: st.never_scraped });
+  $("#scrape-all-label").textContent = t("scrape.all", { n: st.library_total });
   $("#scrape-dlg").showModal();
 }
 
@@ -612,8 +616,8 @@ $("#scrape-form").addEventListener("submit", async (ev) => {
     covers: ev.target.elements.covers.checked,
     details: ev.target.elements.details.checked,
   };
-  if (!body.providers.length) return alert("Elige al menos una fuente");
-  if (!body.covers && !body.details) return alert("Elige carátula, datos o ambos");
+  if (!body.providers.length) return alert(t("error.pick_source"));
+  if (!body.covers && !body.details) return alert(t("error.pick_what"));
   saveSourcePrefs(body.providers, body.covers, body.details);
   $("#scrape-dlg").close();
   try {
@@ -631,17 +635,16 @@ $("#scrape-cancel").addEventListener("click", async () => renderScrape(await api
 $("#scrape-close").addEventListener("click", () => { $("#scrape-bar").hidden = true; });
 
 $("#reset-btn").addEventListener("click", async () => {
-  const answer = prompt(
-    "Se borrarán TODOS los juegos, sus carátulas y las plataformas añadidas. No se puede deshacer.\n" +
-    "Si quieres una copia, cancela y usa antes «Exportar CSV».\n\nEscribe BORRAR para confirmar:"
-  );
+  // The word to type is translated; the API always gets BORRAR
+  const word = t("reset.word");
+  const answer = prompt(t("reset.prompt", { word }));
   if (answer === null) return;
-  if (answer.trim().toUpperCase() !== "BORRAR") { alert("No se ha borrado nada."); return; }
+  if (answer.trim().toUpperCase() !== word.toUpperCase()) { alert(t("reset.nothing")); return; }
   try {
     const r = await api("/api/reset", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "BORRAR" }),
     });
-    alert(`Biblioteca vacía: ${r.games_deleted} juegos y ${r.platforms_deleted} plataformas añadidas borrados.`);
+    alert(t("reset.done", { games: r.games_deleted, platforms: r.platforms_deleted }));
     $("#f-platform").length = 1;
     await loadPlatforms();
     refresh();
@@ -655,12 +658,33 @@ async function loadAbout() {
   const commit = a.commit
     ? ` · <a href="https://github.com/dodert/game-library-manager/commit/${esc(a.commit)}" target="_blank" rel="noopener">${esc(a.commit.slice(0, 7))}</a>`
     : "";
-  const built = a.build_date ? ` · compilada ${esc(a.build_date.slice(0, 16).replace("T", " "))} UTC` : "";
+  const built = a.build_date ? ` · ${esc(t("about.built", { date: a.build_date.slice(0, 16).replace("T", " ") }))}` : "";
   const db = a.database === "postgresql" ? "PostgreSQL" : a.database === "sqlite" ? "SQLite" : a.database;
   $("#about").innerHTML =
-    `Game Library Manager v${esc(a.version)}${a.ref ? ` (${esc(a.ref)})` : ""}${commit}${built} · ${esc(db)}, esquema ${esc(a.schema)}`;
+    `Game Library Manager v${esc(a.version)}${a.ref ? ` (${esc(a.ref)})` : ""}${commit}${built} · ${esc(t("about.database", { db, schema: a.schema }))}`;
 }
 
-Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
-loadAbout();
-api("/api/scrape").then((st) => { if (st.running) pollScrape(); });
+async function openSettings() {
+  const languages = await api("/api/languages");
+  $("#lang-select").innerHTML = languages.map((l) => `<option value="${esc(l.code)}">${esc(l.name)}</option>`).join("");
+  $("#lang-select").value = i18n.lang;
+  $("#settings-dlg").showModal();
+}
+
+$("#settings-btn").addEventListener("click", openSettings);
+$("#settings-cancel").addEventListener("click", () => $("#settings-dlg").close());
+$("#settings-form").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const lang = $("#lang-select").value;
+  $("#settings-dlg").close();
+  if (lang === i18n.lang) return;
+  setLang(lang);
+  location.reload();
+});
+
+initI18n().finally(() => {
+  renderPager();
+  Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
+  loadAbout();
+  api("/api/scrape").then((st) => { if (st.running) pollScrape(); });
+});
