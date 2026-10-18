@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -104,6 +105,8 @@ class GameOut(GameBase):
     id: int
     platform: PlatformOut
     cover_url: str | None = None
+    scraped_at: datetime | None = None
+    scrape_error: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -156,3 +159,26 @@ class CsvImportOut(BaseModel):
     skipped: int
     errors: list[ImportRowError]
     unmapped_columns: list[str]
+
+
+class ScrapeIn(BaseModel):
+    mode: Literal["missing", "all"] = "missing"
+
+
+class ScrapeStatusOut(BaseModel):
+    running: bool
+    mode: str | None
+    total: int
+    done: int
+    found: int
+    covers: int
+    not_found: int
+    failed: int
+    current: str | None
+    started_at: str | None
+    finished_at: str | None
+    cancelled: bool
+    errors: list[str]
+    never_scraped: int
+    library_total: int
+    providers: list[str]

@@ -72,3 +72,8 @@ form input[type=file] { width: auto; }
 .dlg-tabs button { white-space: nowrap; padding: .4rem .7rem; }
 footer { padding: 1rem; text-align: center; font-size: .75rem; color: var(--muted); border-top: 1px solid var(--border); }
 footer a { color: inherit; }
+#scrape-bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin: 0 1rem .75rem; padding: .6rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: .85rem; }
+#scrape-bar .scrape-text { flex: 1 1 300px; }
+#scrape-bar progress { flex: 0 1 200px; accent-color: var(--accent); }
+form label.radio { flex-direction: row; align-items: center; gap: .5rem; color: var(--text); font-size: .95rem; }
+form label.radio input { width: auto; }

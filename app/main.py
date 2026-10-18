@@ -23,8 +23,9 @@ from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider,
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     CoverFetchIn, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
-    ProviderOut, SteamImportOut,
+    ProviderOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
+from .scraper import Scraper
 from .seed import seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -62,9 +63,12 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         )
     }
 
+    scraper = Scraper(SessionLocal, http, providers, covers_dir, delay=settings.scrape_delay)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         yield
+        scraper.cancel()
         await http.aclose()
 
     app = FastAPI(title="Game Library Manager", version=__version__, lifespan=lifespan)
@@ -245,6 +249,31 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         replace_cover(game, filename)
         db.commit()
         return to_out(get_game_or_404(db, game_id))
+
+    def scrape_status(db: Session) -> ScrapeStatusOut:
+        return ScrapeStatusOut(
+            **scraper.status_dict(),
+            never_scraped=db.scalar(select(func.count(Game.id)).where(Game.scraped_at.is_(None))),
+            library_total=db.scalar(select(func.count(Game.id))),
+            providers=[p.label for p in scraper.enabled_providers],
+        )
+
+    @app.get("/api/scrape", response_model=ScrapeStatusOut)
+    def get_scrape(db: Session = Depends(get_db)):
+        return scrape_status(db)
+
+    @app.post("/api/scrape", response_model=ScrapeStatusOut, status_code=202)
+    async def start_scrape(data: ScrapeIn, db: Session = Depends(get_db)):
+        try:
+            scraper.start(data.mode)
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc))
+        return scrape_status(db)
+
+    @app.post("/api/scrape/cancel", response_model=ScrapeStatusOut)
+    def cancel_scrape(db: Session = Depends(get_db)):
+        scraper.cancel()
+        return scrape_status(db)
 
     async def download_steam_covers(game_ids: list[int]) -> None:
         for game_id in game_ids:

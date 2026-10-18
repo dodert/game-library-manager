@@ -165,6 +165,9 @@ function openDialog(game) {
     }
   }
   setPane("general");
+  $("#scrape-info").textContent = game?.scraped_at
+    ? `Última búsqueda online: ${game.scraped_at.slice(0, 16).replace("T", " ")}${game.scrape_error ? ` · ${game.scrape_error}` : ""}`
+    : "";
   $("#dlg").showModal();
 }
 
@@ -266,6 +269,66 @@ let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadGames, 250); });
 for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", loadGames);
 
+let scrapePoll = null;
+
+function renderScrape(st) {
+  const bar = $("#scrape-bar");
+  if (!st.running && !st.finished_at) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const progress = bar.querySelector("progress");
+  progress.max = st.total || 1;
+  progress.value = st.done;
+  const counts = `${st.covers} carátulas nuevas · ${st.found} encontrados · ${st.not_found} sin resultados` +
+    (st.failed ? ` · ${st.failed} con error` : "");
+  bar.querySelector(".scrape-text").textContent = st.running
+    ? `Buscando ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    : `${st.cancelled ? "Búsqueda cancelada" : "Búsqueda terminada"}: ${st.done}/${st.total} · ${counts}` +
+      (st.errors.length ? ` · Errores: ${st.errors.slice(0, 3).join(" | ")}` : "");
+  $("#scrape-cancel").hidden = !st.running;
+  $("#scrape-close").hidden = st.running;
+}
+
+async function pollScrape() {
+  const st = await api("/api/scrape");
+  renderScrape(st);
+  if (st.running) {
+    scrapePoll = setTimeout(pollScrape, 1500);
+    if (tab !== "stats") loadGames();
+  } else {
+    scrapePoll = null;
+    refresh();
+  }
+  return st;
+}
+
+async function openScrapeDialog() {
+  const st = await api("/api/scrape");
+  if (st.running) { renderScrape(st); return; }
+  $("#scrape-providers").textContent = `Fuentes activas: ${st.providers.join(", ") || "ninguna"}.` +
+    (st.providers.length <= 1 ? " Añade claves de IGDB, SteamGridDB o ScreenScraper para mejores resultados." : "");
+  $("#scrape-missing-label").textContent = `Solo los que nunca se han buscado (${st.never_scraped})`;
+  $("#scrape-all-label").textContent = `Todos (${st.library_total})`;
+  $("#scrape-dlg").showModal();
+}
+
+$("#scrape-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const mode = new FormData(ev.target).get("mode");
+  $("#scrape-dlg").close();
+  try {
+    renderScrape(await api("/api/scrape", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    }));
+    if (!scrapePoll) pollScrape();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$("#scrape-btn").addEventListener("click", openScrapeDialog);
+$("#scrape-dlg-cancel").addEventListener("click", () => $("#scrape-dlg").close());
+$("#scrape-cancel").addEventListener("click", async () => renderScrape(await api("/api/scrape/cancel", { method: "POST" })));
+$("#scrape-close").addEventListener("click", () => { $("#scrape-bar").hidden = true; });
+
 async function loadAbout() {
   const a = await api("/api/about");
   const commit = a.commit
@@ -279,3 +342,4 @@ async function loadAbout() {
 
 Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
 loadAbout();
+api("/api/scrape").then((st) => { if (st.running) pollScrape(); });

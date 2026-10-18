@@ -48,6 +48,10 @@ To list it in **Apps → Private** (Community Applications) instead, download it
 mkdir -p /boot/config/plugins/community.applications/private/dodert && curl -fsSL https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml -o /boot/config/plugins/community.applications/private/dodert/game-library-manager.xml
 ```
 
+## Covers for imported games
+
+**Buscar carátulas** looks every game up in the enabled providers (IGDB, ScreenScraper, SteamGridDB and Steam, best match by title and platform) and downloads the cover. It fills the description and year only where they are empty. Choose **Solo los que nunca se han buscado** to cover games added since the last run (for example after a CSV import), or **Todos** to search the whole library again and replace existing covers. It runs in the background with a progress bar; games with no match are marked "Sin resultados" in their card's dialog. `SCRAPE_DELAY` (seconds between games, default `0.5`) keeps it inside the providers' rate limits.
+
 ## Run locally
 
 ```bash

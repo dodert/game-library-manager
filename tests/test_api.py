@@ -93,7 +93,7 @@ def test_about_and_versioned_assets(tmp_path):
     client = TestClient(create_app(Settings(data_dir=tmp_path, git_sha="de2880af3e16", git_ref="main", build_date="2026-10-18T13:22:00Z")))
     about = client.get("/api/about").json()
     assert about["version"] == __version__ and about["commit"] == "de2880af3e16" and about["ref"] == "main"
-    assert about["database"] == "sqlite" and about["schema"] == "0004"
+    assert about["database"] == "sqlite" and about["schema"] == "0005"
     page = client.get("/")
     assert page.headers["cache-control"] == "no-cache"
     assert f"/static/app.js?v={__version__}-de2880a" in page.text and "{{" not in page.text
