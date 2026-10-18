@@ -188,10 +188,36 @@ const cardHtml = (g) => `
       </div>
     </article>`;
 
-const TABLE_HEAD = `<table class="games"><thead><tr>
-    <th></th><th>Título</th><th>Plataforma</th><th>Año</th><th>Formato</th><th>Estado</th><th>Progreso</th>
-    <th>Tienda</th><th>Fecha compra</th><th>Precio</th><th>Nota</th>
-  </tr></thead><tbody></tbody></table>`;
+// [sort key, header]; the key is the API's sort field
+const COLUMNS = [
+  ["title", "Título"], ["platform", "Plataforma"], ["release_year", "Año"], ["format", "Formato"],
+  ["status", "Estado"], ["completion", "Progreso"], ["store", "Tienda"], ["purchase_date", "Fecha compra"],
+  ["purchase_price", "Precio"], ["rating", "Nota"],
+];
+
+function tableHead() {
+  const sort = $("#sort").value;
+  const th = ([key, label]) => {
+    const dir = sort === key ? "asc" : sort === `-${key}` ? "desc" : null;
+    return `<th data-sort="${key}"${dir ? ` aria-sort="${dir === "asc" ? "ascending" : "descending"}"` : ""} title="Ordenar por ${label}">${label}${dir ? (dir === "asc" ? " ▲" : " ▼") : ""}</th>`;
+  };
+  return `<table class="games"><thead><tr><th></th>${COLUMNS.map(th).join("")}</tr></thead><tbody></tbody></table>`;
+}
+
+// Sort by a column: same column again flips the direction. Columns that are not in the
+// sort menu get a temporary option, so the menu always shows the current order.
+function sortBy(key) {
+  const select = $("#sort");
+  const value = select.value === key ? `-${key}` : key;
+  let option = [...select.options].find((o) => o.value === value);
+  if (!option) {
+    option = $("#sort-column") ?? select.appendChild(Object.assign(document.createElement("option"), { id: "sort-column" }));
+    option.value = value;
+    option.textContent = `${COLUMNS.find(([k]) => k === key)[1]} ${value.startsWith("-") ? "▼" : "▲"}`;
+  }
+  select.value = value;
+  loadGames();
+}
 
 const rowHtml = (g) => `
     <tr data-id="${g.id}">
@@ -214,7 +240,7 @@ const itemHtml = (g) => (view === "table" ? rowHtml(g) : cardHtml(g));
 
 function resetGrid() {
   $("#grid").className = `grid ${view === "grid" ? "" : view}`.trim();
-  $("#grid").innerHTML = view === "table" ? TABLE_HEAD : "";
+  $("#grid").innerHTML = view === "table" ? tableHead() : "";
 }
 
 function setView(name) {
@@ -436,6 +462,8 @@ $("#steam-import-btn").addEventListener("click", async () => {
 $("#cancel-btn").addEventListener("click", () => $("#dlg").close());
 $("#add-btn").addEventListener("click", () => openDialog(null));
 $("#grid").addEventListener("click", async (ev) => {
+  const th = ev.target.closest("th[data-sort]");
+  if (th) return sortBy(th.dataset.sort);
   const card = ev.target.closest("[data-id]");
   if (card) openDialog(await api(`/api/games/${card.dataset.id}`));
 });

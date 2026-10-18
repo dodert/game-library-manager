@@ -39,6 +39,8 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 table.games { width: 100%; border-collapse: collapse; font-size: .85rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 table.games th { text-align: left; font-weight: 600; color: var(--muted); padding: .5rem; border-bottom: 1px solid var(--border); white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
 table.games td { padding: .35rem .5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.games th[data-sort] { cursor: pointer; user-select: none; }
+table.games th[data-sort]:hover, table.games th[aria-sort] { color: var(--text); }
 table.games tr[data-id] { cursor: pointer; }
 table.games tr[data-id]:hover td { background: var(--bg); }
 table.games td.num { text-align: right; white-space: nowrap; }

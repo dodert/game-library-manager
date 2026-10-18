@@ -119,3 +119,20 @@ def test_image_version_overrides_package_version(tmp_path):
     assert client.get("/api/about").json()["version"] == "0.5.0-feat-bulk-scrape.27"
     assert client.get("/api/health").json()["version"] == "0.5.0-feat-bulk-scrape.27"
     assert "/static/app.js?v=0.5.0-feat-bulk-scrape.27" in client.get("/").text
+
+
+def test_sort_by_table_columns(client):
+    ps5, pc = platform_id(client), platform_id(client, "PC")
+    client.post("/api/games", json={"title": "A", "platform_id": pc, "format": "digital", "purchase_price": 30, "rating": 7})
+    client.post("/api/games", json={"title": "B", "platform_id": ps5, "format": "physical", "purchase_price": 10})
+    client.post("/api/games", json={"title": "C", "platform_id": ps5, "format": "digital", "rating": 9})
+
+    def order(sort):
+        return [g["title"] for g in client.get("/api/games", params={"sort": sort}).json()["items"]]
+
+    assert order("platform") == ["A", "B", "C"]  # PC < PlayStation 5, then by id
+    assert order("-platform") == ["B", "C", "A"]
+    assert order("purchase_price") == ["B", "A", "C"]  # no price goes last
+    assert order("-purchase_price") == ["A", "B", "C"]
+    assert order("-rating") == ["C", "A", "B"]
+    assert client.get("/api/games", params={"sort": "nope"}).status_code == 422
