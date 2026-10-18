@@ -20,6 +20,8 @@ Work in progress. Roadmap:
 
 Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` (`latest`) and on `v*` tags (`1.2.3`, `1.2`).
 
+To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`); set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
+
 ```bash
 docker run -d --name game-library-manager -p 8000:8000 \
   -v /path/to/data:/data -e PUID=1000 -e PGID=1000 \
