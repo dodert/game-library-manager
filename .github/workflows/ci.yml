@@ -8,6 +8,10 @@ on:
   # Manual run from any branch: builds and pushes the image tagged with the branch name
   workflow_dispatch:
 
+# Read-only token by default; jobs that publish ask for more themselves
+permissions:
+  contents: read
+
 env:
   IMAGE: ghcr.io/dodert/game-library-manager
 

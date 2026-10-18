@@ -11,6 +11,10 @@ on:
     paths: ["unraid/**"]
   workflow_dispatch:
 
+# Read-only GITHUB_TOKEN; the push to the templates repo uses TEMPLATES_TOKEN
+permissions:
+  contents: read
+
 env:
   TEMPLATES_REPO: dodert/unraid-templates
   TEMPLATES_BRANCH: main
