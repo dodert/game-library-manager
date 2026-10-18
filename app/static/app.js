@@ -65,8 +65,14 @@ function providerQuery() {
 $("#lookup-opts").addEventListener("change", () =>
   saveSourcePrefs(lookupProviders(), $("#use-cover").checked, $("#use-details").checked));
 
+// What the online searches look for: the "Buscar como" text when filled, else the title
+function searchText() {
+  const f = $("#game-form").elements;
+  return f.search_title.value.trim() || f.title.value.trim();
+}
+
 async function lookup() {
-  const title = $("#game-form").elements.title.value.trim();
+  const title = searchText();
   if (!title) return;
   $("#lookup").hidden = false;
   $("#lookup-results").innerHTML = "";
@@ -100,7 +106,8 @@ async function lookup() {
 function applyResult(r) {
   const f = $("#game-form").elements;
   if ($("#use-details").checked) {
-    f.title.value = r.title;
+    // With a "Buscar como" text the title is deliberately different (an edition, a pack…): keep it
+    if (!f.search_title.value.trim()) f.title.value = r.title;
     for (const key of ["release_year", "summary", "publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
   }
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
@@ -120,7 +127,7 @@ function showCover(src, full = src) {
 
 async function searchCovers() {
   const form = $("#game-form");
-  const title = form.elements.title.value.trim();
+  const title = searchText();
   if (!title) return alert("Escribe primero el título");
   const platform = form.elements.platform_id.selectedOptions[0]?.textContent ?? "";
   $("#cover-picker").hidden = false;

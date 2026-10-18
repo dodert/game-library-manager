@@ -199,7 +199,7 @@ class Scraper:
             if not game:
                 return
             self.status.current = game.title
-            title, platform = game.title, game.platform.name
+            title, platform = game.search_title or game.title, game.platform.name
             cover = None
             try:
                 results = await self._search(title)

@@ -113,3 +113,16 @@ def test_scrape_only_uses_selected_providers(tmp_path):
 
         assert client.post("/api/scrape", json={"mode": "all", "providers": ["steamgriddb"]}).status_code == 400
         assert client.post("/api/scrape", json={"mode": "all", "covers": False, "details": False}).status_code == 422
+
+
+def test_scrape_searches_by_search_title_when_set(tmp_path):
+    with make_client(tmp_path) as client:
+        pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+        game = client.post("/api/games", json={"title": "Hades Edición Coleccionista", "platform_id": pc,
+                                               "format": "physical", "search_title": "Hades"}).json()
+        status = run(client, "missing", providers=["igdb"])
+        assert (status["found"], status["covers"]) == (1, 1)
+        assert client.get(f"/api/games/{game['id']}").json()["summary"] == "Roguelike"
+        # Clearing it goes back to searching by title, which finds nothing here
+        client.patch(f"/api/games/{game['id']}", json={"search_title": None})
+        assert run(client, "all", providers=["igdb"], covers=False)["not_found"] == 1
