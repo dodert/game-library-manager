@@ -18,7 +18,9 @@ from .models import CompletionStatus, Game, GameFormat, GameStatus, Platform
 EXPORT_FIELDS = [
     "title", "platform", "format", "status", "completion", "store", "edition", "region",
     "barcode", "release_year", "purchase_date", "purchase_price", "loaned_to", "loaned_at",
-    "notes", "summary", "steam_appid",
+    "notes", "summary", "steam_appid", "loan_due", "publisher", "developer", "genre", "series",
+    "item_type", "serial_number", "completeness", "condition", "has_box", "has_manual", "quantity",
+    "current_value", "owner", "location", "storage_device", "storage_slot", "rating", "tags", "completed_at",
 ]
 
 # CLZ exports leave Platform empty for hardware and accessories.
@@ -42,7 +44,36 @@ ALIASES = {
     "notes": ["notes", "notas", "comments", "comentarios"],
     "summary": ["summary", "descripcion", "description", "plot"],
     "steam_appid": ["steam_appid", "steam appid", "steam app id"],
+    "loan_due": ["loan_due", "due date", "fecha devolucion"],
+    "publisher": ["publisher", "editor", "distribuidora"],
+    "developer": ["developer", "desarrollador", "desarrolladora"],
+    "genre": ["genre", "genero"],
+    "series": ["series", "serie", "saga"],
+    "item_type": ["item_type", "hardware type", "tipo de articulo"],
+    "serial_number": ["serial_number", "serial no.", "serial no", "serial number", "numero de serie"],
+    "completeness": ["completeness", "completitud"],
+    "condition": ["condition", "condicion", "estado fisico"],
+    "has_box": ["has_box", "box", "caja"],
+    "has_manual": ["has_manual", "manual"],
+    "quantity": ["quantity", "cantidad"],
+    "current_value": ["current_value", "value", "valor"],
+    "owner": ["owner", "propietario"],
+    "location": ["location", "ubicacion"],
+    "storage_device": ["storage_device", "storage device"],
+    "storage_slot": ["storage_slot", "storage slot"],
+    "rating": ["rating", "my rating", "puntuacion", "valoracion"],
+    "tags": ["tags", "etiquetas"],
+    "completed_at": ["completed_at", "completed date", "fecha completado"],
 }
+
+TEXT_FIELDS = [
+    "store", "edition", "region", "barcode", "notes", "summary", "loaned_to", "publisher", "developer",
+    "genre", "series", "item_type", "serial_number", "completeness", "condition", "owner", "location",
+    "storage_device", "storage_slot", "tags",
+]
+DATE_FIELDS = ["purchase_date", "loaned_at", "loan_due", "completed_at"]
+PRICE_FIELDS = ["purchase_price", "current_value"]
+BOOL_FIELDS = ["has_box", "has_manual"]
 
 
 def _norm(text: str) -> str:
@@ -50,6 +81,7 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().lower().replace("_", " "))
 
 
+TEXT_LIMITS = {f: getattr(Game.__table__.c[f].type, "length", None) for f in TEXT_FIELDS}
 ALIAS_LOOKUP = {_norm(alias): field for field, aliases in ALIASES.items() for alias in aliases}
 
 
@@ -122,6 +154,26 @@ def _parse_date(value: str) -> date | None:
     raise ValueError(f"unrecognised date '{value}'")
 
 
+def _parse_bool(value: str) -> bool | None:
+    v = _norm(value)
+    if not v:
+        return None
+    if v in ("yes", "si", "true", "1", "x"):
+        return True
+    if v in ("no", "false", "0"):
+        return False
+    raise ValueError(f"unrecognised yes/no value '{value}'")
+
+
+def _parse_int(value: str) -> int | None:
+    value = value.strip()
+    if not value:
+        return None
+    if not value.isdigit():
+        raise ValueError(f"'{value}' is not a whole number")
+    return int(value)
+
+
 def _parse_year(value: str) -> int | None:
     match = re.search(r"(19|20)\d{2}", value)
     return int(match.group()) if match else None
@@ -185,25 +237,28 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
                 skipped += 1
                 continue
             year = values.get("release_year", "")
-            game = Game(
-                title=title[:300],
-                platform_id=platform.id,
-                format=game_format,
-                status=_parse_status(values.get("status", "")),
-                completion=_parse_completion(values.get("completion", "")),
-                store=values.get("store") or None,
-                edition=values.get("edition") or None,
-                region=values.get("region") or None,
-                barcode=values.get("barcode") or None,
-                release_year=_parse_year(year) if year else None,
-                purchase_date=_parse_date(values.get("purchase_date", "")),
-                purchase_price=_parse_price(values.get("purchase_price", "")),
-                loaned_to=values.get("loaned_to") or None,
-                loaned_at=_parse_date(values.get("loaned_at", "")),
-                notes=values.get("notes") or None,
-                summary=values.get("summary") or None,
-                steam_appid=int(values["steam_appid"]) if values.get("steam_appid", "").isdigit() else None,
-            )
+            rating = _parse_int(values.get("rating", ""))
+            fields = {
+                "title": title[:300],
+                "platform_id": platform.id,
+                "format": game_format,
+                "status": _parse_status(values.get("status", "")),
+                "completion": _parse_completion(values.get("completion", "")),
+                "release_year": _parse_year(year) if year else None,
+                "steam_appid": int(values["steam_appid"]) if values.get("steam_appid", "").isdigit() else None,
+                "quantity": _parse_int(values.get("quantity", "")),
+                # CLZ writes 0 for "not rated"
+                "rating": min(rating, 10) if rating else None,
+            }
+            for field in TEXT_FIELDS:
+                fields[field] = values.get(field, "")[:TEXT_LIMITS[field]] or None
+            for field in DATE_FIELDS:
+                fields[field] = _parse_date(values.get(field, ""))
+            for field in PRICE_FIELDS:
+                fields[field] = _parse_price(values.get(field, ""))
+            for field in BOOL_FIELDS:
+                fields[field] = _parse_bool(values.get(field, ""))
+            game = Game(**fields)
             if game.loaned_to and game.status == GameStatus.owned:
                 game.status = GameStatus.lent
             db.add(game)

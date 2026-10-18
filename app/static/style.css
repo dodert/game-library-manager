@@ -62,3 +62,11 @@ menu { display: flex; gap: .5rem; padding: 0; margin: 1rem 0 0; }
 .bar { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; min-width: 2px; }
 .bar-value { text-align: right; font-variant-numeric: tabular-nums; }
 .hint { color: var(--muted); font-size: .8rem; }
+.dlg-tabs { padding: 0 0 .75rem; border-bottom: 1px solid var(--border); margin-bottom: .75rem; }
+.dlg-tabs button[aria-selected="true"] { background: var(--bg); }
+.pane { min-height: 280px; }
+form .row label { flex: 1 1 0; min-width: 120px; }
+form input, form select, form textarea { width: 100%; min-width: 0; }
+form input[type=file] { width: auto; }
+.dlg-tabs { flex-wrap: nowrap; overflow-x: auto; }
+.dlg-tabs button { white-space: nowrap; padding: .4rem .7rem; }

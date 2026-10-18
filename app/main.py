@@ -122,7 +122,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         stmt = select(Game)
         if q:
             like = f"%{q}%"
-            stmt = stmt.where(or_(Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like)))
+            stmt = stmt.where(or_(
+                Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like), Game.tags.ilike(like),
+                Game.publisher.ilike(like), Game.developer.ilike(like), Game.series.ilike(like),
+            ))
         if platform_id:
             stmt = stmt.where(Game.platform_id == platform_id)
         if format:

@@ -59,51 +59,109 @@
         <div id="lookup-results"></div>
       </div>
       <div id="cover-preview" hidden><img alt=""><span></span></div>
-      <label>Plataforma <select name="platform_id" required></select></label>
-      <div class="row">
-        <label>Formato
-          <select name="format">
-            <option value="physical">Físico</option>
-            <option value="digital">Digital</option>
-          </select>
+      <nav class="tabs dlg-tabs" role="tablist">
+        <button type="button" role="tab" data-pane="general" aria-selected="true">General</button>
+        <button type="button" role="tab" data-pane="details" aria-selected="false">Detalles</button>
+        <button type="button" role="tab" data-pane="collection" aria-selected="false">Colección</button>
+        <button type="button" role="tab" data-pane="personal" aria-selected="false">Personal</button>
+      </nav>
+
+      <div class="pane" data-pane="general">
+        <label>Plataforma <select name="platform_id" required></select></label>
+        <div class="row">
+          <label>Formato
+            <select name="format">
+              <option value="physical">Físico</option>
+              <option value="digital">Digital</option>
+            </select>
+          </label>
+          <label>Estado
+            <select name="status">
+              <option value="owned">En colección</option>
+              <option value="wishlist">Wishlist</option>
+              <option value="lent">Prestado</option>
+              <option value="sold">Vendido</option>
+            </select>
+          </label>
+          <label>Tipo de artículo <input name="item_type" list="item-types" placeholder="Juego"></label>
+        </div>
+        <div class="row">
+          <label>Tienda / launcher <input name="store" placeholder="Steam, PSN, eShop, GOG…"></label>
+          <label>Año <input name="release_year" type="number" min="1950" max="2100"></label>
+        </div>
+        <label>Descripción <textarea name="summary" rows="3"></textarea></label>
+        <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+      </div>
+
+      <div class="pane" data-pane="details" hidden>
+        <div class="row">
+          <label>Editor <input name="publisher"></label>
+          <label>Desarrollador <input name="developer"></label>
+        </div>
+        <div class="row">
+          <label>Género <input name="genre"></label>
+          <label>Serie / saga <input name="series"></label>
+        </div>
+        <div class="row">
+          <label>Edición <input name="edition"></label>
+          <label>Región <input name="region" placeholder="PAL, NTSC-U…"></label>
+        </div>
+        <div class="row">
+          <label>Código de barras <input name="barcode"></label>
+          <label>Nº de serie <input name="serial_number"></label>
+        </div>
+      </div>
+
+      <div class="pane" data-pane="collection" hidden>
+        <div class="row">
+          <label>Fecha compra <input name="purchase_date" type="date"></label>
+          <label>Precio compra <input name="purchase_price" type="number" step="0.01" min="0" data-type="number"></label>
+          <label>Valor actual <input name="current_value" type="number" step="0.01" min="0" data-type="number"></label>
+        </div>
+        <div class="row">
+          <label>Completitud <input name="completeness" list="completeness-list" placeholder="CIB, New, Loose…"></label>
+          <label>Condición <input name="condition"></label>
+          <label>Cantidad <input name="quantity" type="number" min="0" data-type="number"></label>
+        </div>
+        <div class="row">
+        <label>Caja
+          <select name="has_box" data-type="bool"><option value="">—</option><option value="true">Sí</option><option value="false">No</option></select>
         </label>
-        <label>Estado
-          <select name="status">
-            <option value="owned">En colección</option>
-            <option value="wishlist">Wishlist</option>
-            <option value="lent">Prestado</option>
-            <option value="sold">Vendido</option>
-          </select>
+        <label>Manual
+          <select name="has_manual" data-type="bool"><option value="">—</option><option value="true">Sí</option><option value="false">No</option></select>
         </label>
-        <label>Progreso
-          <select name="completion">
-            <option value="unplayed">Sin jugar</option>
-            <option value="playing">Jugando</option>
-            <option value="completed">Completado</option>
-            <option value="abandoned">Abandonado</option>
-          </select>
-        </label>
+          <label>Propietario <input name="owner"></label>
+        </div>
+        <div class="row">
+          <label>Ubicación <input name="location"></label>
+          <label>Almacenamiento <input name="storage_device"></label>
+          <label>Hueco <input name="storage_slot"></label>
+        </div>
       </div>
-      <div class="row">
-        <label>Tienda / launcher <input name="store" placeholder="Steam, PSN, eShop, GOG…"></label>
-        <label>Edición <input name="edition"></label>
-        <label>Región <input name="region" placeholder="PAL, NTSC-U…"></label>
+
+      <div class="pane" data-pane="personal" hidden>
+        <div class="row">
+          <label>Progreso
+            <select name="completion">
+              <option value="unplayed">Sin jugar</option>
+              <option value="playing">Jugando</option>
+              <option value="completed">Completado</option>
+              <option value="abandoned">Abandonado</option>
+            </select>
+          </label>
+          <label>Fecha completado <input name="completed_at" type="date"></label>
+          <label>Puntuación (0-10) <input name="rating" type="number" min="0" max="10" data-type="number"></label>
+        </div>
+        <label>Etiquetas <input name="tags" placeholder="separadas por comas"></label>
+        <div class="row">
+          <label>Prestado a <input name="loaned_to"></label>
+          <label>Fecha préstamo <input name="loaned_at" type="date"></label>
+          <label>Devolución <input name="loan_due" type="date"></label>
+        </div>
+        <label>Notas <textarea name="notes" rows="3"></textarea></label>
       </div>
-      <div class="row">
-        <label>Código de barras <input name="barcode"></label>
-        <label>Año <input name="release_year" type="number" min="1950" max="2100"></label>
-      </div>
-      <div class="row">
-        <label>Fecha compra <input name="purchase_date" type="date"></label>
-        <label>Precio <input name="purchase_price" type="number" step="0.01" min="0"></label>
-      </div>
-      <label>Descripción <textarea name="summary" rows="3"></textarea></label>
-      <div class="row">
-        <label>Prestado a <input name="loaned_to"></label>
-        <label>Fecha préstamo <input name="loaned_at" type="date"></label>
-      </div>
-      <label>Notas <textarea name="notes" rows="2"></textarea></label>
-      <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+      <datalist id="item-types"><option value="Console"><option value="Controller"><option value="Accessory"><option value="Amiibo"></datalist>
+      <datalist id="completeness-list"><option value="CIB"><option value="New"><option value="Loose"><option value="Box only"></datalist>
       <menu>
         <button type="button" id="delete-btn" class="danger" hidden>Eliminar</button>
         <span class="spacer"></span>

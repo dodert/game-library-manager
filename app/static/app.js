@@ -115,7 +115,7 @@ async function loadStats() {
 
 function setTab(name) {
   tab = name;
-  document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
   const isStats = name === "stats";
   $("#filters").hidden = isStats;
   $("#grid").hidden = isStats;
@@ -137,13 +137,18 @@ async function loadGames() {
       <div class="info">
         <div class="title">${esc(g.title)}</div>
         <div class="meta">${esc(g.platform.name)}${g.release_year ? " · " + g.release_year : ""}</div>
-        <span class="badge">${FORMAT[g.format]}</span>${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
+        <span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
         ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
     </article>`).join("");
 }
 
 const refresh = () => Promise.all([tab === "stats" ? null : loadGames(), loadStats()]);
+
+function setPane(name) {
+  document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.pane === name));
+  document.querySelectorAll("#game-form .pane").forEach((p) => { p.hidden = p.dataset.pane !== name; });
+}
 
 function openDialog(game) {
   const form = $("#game-form");
@@ -156,9 +161,10 @@ function openDialog(game) {
   form.elements.id.value = game?.id ?? "";
   if (game) {
     for (const el of form.elements) {
-      if (el.name && !SKIP_FIELDS.has(el.name) && game[el.name] != null) el.value = game[el.name];
+      if (el.name && !SKIP_FIELDS.has(el.name) && game[el.name] != null) el.value = String(game[el.name]);
     }
   }
+  setPane("general");
   $("#dlg").showModal();
 }
 
@@ -170,8 +176,12 @@ $("#game-form").addEventListener("submit", async (ev) => {
     if (!el.name || SKIP_FIELDS.has(el.name)) continue;
     data[el.name] = el.value === "" ? null : el.value;
   }
+  for (const el of form.elements) {
+    if (data[el.name] == null) continue;
+    if (el.dataset.type === "number") data[el.name] = Number(data[el.name]);
+    if (el.dataset.type === "bool") data[el.name] = data[el.name] === "true";
+  }
   for (const key of ["platform_id", "release_year", "steam_appid"]) if (data[key] != null) data[key] = Number(data[key]);
-  if (data.purchase_price != null) data.purchase_price = Number(data.purchase_price);
   if (data.loaned_to && data.status === "owned") data.status = "lent";
 
   const id = form.elements.id.value;
@@ -213,7 +223,8 @@ $("#delete-btn").addEventListener("click", async () => {
 });
 
 $("#lookup-btn").addEventListener("click", lookup);
-document.querySelectorAll(".tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
 $("#csv-import-btn").addEventListener("click", () => $("#csv-file").click());
 $("#csv-file").addEventListener("change", async (ev) => {
   const file = ev.target.files[0];

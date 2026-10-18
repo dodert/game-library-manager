@@ -93,4 +93,31 @@ def test_clz_export_sample(client):
     assert stick["store"] == "xtralife.com" and stick["barcode"] == "6922621501350"
     assert stick["status"] == "owned" and stick["completion"] == "unplayed" and stick["format"] == "physical"
     assert games["Game & Watch Super Mario Bros"]["purchase_date"] is None
-    assert games["Figura Amiibo Link The Legend of Zelda: Tears of the Kingdom"]["release_year"] == 2023
+    amiibo = games["Figura Amiibo Link The Legend of Zelda: Tears of the Kingdom"]
+    assert amiibo["release_year"] == 2023 and amiibo["item_type"] == "Amiibo"
+    assert amiibo["completeness"] == "New" and amiibo["has_box"] is True and amiibo["has_manual"] is True
+    assert amiibo["quantity"] == 1 and amiibo["rating"] is None  # CLZ writes 0 for "not rated"
+    assert sorted(res["unmapped_columns"]) == sorted([
+        "Added Date", "Type", "Release Year", "Sort Title", "Purchase Year", "Subtype", "Added Year",
+        "Completed Year", "Index", "Modified Date", "Audience Rating",
+    ])
+
+
+def test_collector_fields_round_trip(client, tmp_path):
+    pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+    data = {
+        "title": "Chrono Trigger", "platform_id": pc, "format": "physical", "publisher": "Square",
+        "developer": "Square", "genre": "RPG", "series": "Chrono", "serial_number": "SNS-ACTE",
+        "completeness": "CIB", "condition": "Muy bueno", "has_box": True, "has_manual": False,
+        "quantity": 2, "current_value": 250.5, "owner": "Yo", "location": "Estantería 2",
+        "storage_device": "Caja A", "storage_slot": "3", "rating": 9, "tags": "retro, favorito",
+        "completed_at": "2020-01-05", "loaned_to": "Luis", "loaned_at": "2026-10-01", "loan_due": "2026-11-01",
+    }
+    assert client.post("/api/games", json=data).status_code == 201
+    other = TestClient(create_app(Settings(data_dir=tmp_path / "other")))
+    res = upload(other, client.get("/api/export/csv").text).json()
+    assert res["imported"] == 1 and res["errors"] == [] and res["unmapped_columns"] == []
+    game = other.get("/api/games", params={"q": "favorito"}).json()["items"][0]
+    for key, value in data.items():
+        if key != "platform_id":
+            assert game[key] == value, key

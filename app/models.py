@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -60,6 +60,28 @@ class Game(Base):
     steam_appid: Mapped[int | None] = mapped_column(index=True)
     loaned_to: Mapped[str | None] = mapped_column(String(150))
     loaned_at: Mapped[date | None] = mapped_column(Date)
+    loan_due: Mapped[date | None] = mapped_column(Date)
+    # Collector details (same fields CLZ Games exports)
+    publisher: Mapped[str | None] = mapped_column(String(150))
+    developer: Mapped[str | None] = mapped_column(String(150))
+    genre: Mapped[str | None] = mapped_column(String(150))
+    series: Mapped[str | None] = mapped_column(String(150))
+    # Empty for games; Console, Controller, Amiibo... for hardware and accessories
+    item_type: Mapped[str | None] = mapped_column(String(50))
+    serial_number: Mapped[str | None] = mapped_column(String(100))
+    completeness: Mapped[str | None] = mapped_column(String(30))
+    condition: Mapped[str | None] = mapped_column(String(50))
+    has_box: Mapped[bool | None] = mapped_column(Boolean)
+    has_manual: Mapped[bool | None] = mapped_column(Boolean)
+    quantity: Mapped[int | None]
+    current_value: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
+    owner: Mapped[str | None] = mapped_column(String(100))
+    location: Mapped[str | None] = mapped_column(String(150))
+    storage_device: Mapped[str | None] = mapped_column(String(150))
+    storage_slot: Mapped[str | None] = mapped_column(String(50))
+    rating: Mapped[int | None]
+    tags: Mapped[str | None] = mapped_column(String(500))
+    completed_at: Mapped[date | None] = mapped_column(Date)
     cover_path: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
