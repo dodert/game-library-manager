@@ -1,7 +1,7 @@
 name: Sync Unraid template
 
-# Copies unraid/game-library-manager.xml to the public templates repo so Unraid's
-# "Template repositories" can pick it up (Unraid can't read this private repo).
+# Copies the unraid/ folder (template XML, ca_profile.xml, icon, LICENSE, README) to the
+# public templates repo that Community Applications reads.
 # Needs the secret TEMPLATES_TOKEN: a fine-grained token with "Contents: Read and write"
 # on the templates repo only.
 
@@ -10,6 +10,10 @@ on:
     branches: [main]
     paths: ["unraid/**"]
   workflow_dispatch:
+
+# Read-only GITHUB_TOKEN; the push to the templates repo uses TEMPLATES_TOKEN
+permissions:
+  contents: read
 
 env:
   TEMPLATES_REPO: dodert/unraid-templates
@@ -37,8 +41,8 @@ jobs:
           else
             git checkout --orphan "$TEMPLATES_BRANCH"
           fi
-          cp ../unraid/*.xml .
-          git add *.xml
+          cp -r ../unraid/. .
+          git add -A
           if git diff --cached --quiet; then
             echo "Template unchanged"
             exit 0

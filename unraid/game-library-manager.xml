@@ -10,6 +10,9 @@
   <Project>https://github.com/dodert/game-library-manager</Project>
   <Overview>Self-hosted video game collection manager (physical and digital, every console and PC) with cover art and metadata from IGDB, SteamGridDB, Steam and ScreenScraper. SQLite by default, PostgreSQL optional.</Overview>
   <Category>MediaApp:Other Tools:</Category>
+  <Icon>https://raw.githubusercontent.com/dodert/unraid-templates/main/icon.png</Icon>
+  <DonateLink>https://ko-fi.com/dodert</DonateLink>
+  <DonateText>Support development on Ko-fi</DonateText>
   <WebUI>http://[IP]:[PORT:8000]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml</TemplateURL>
   <Config Name="WebUI port" Target="8000" Default="8000" Mode="tcp" Description="Web interface port" Type="Port" Display="always" Required="true" Mask="false">8000</Config>
