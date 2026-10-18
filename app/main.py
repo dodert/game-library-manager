@@ -38,7 +38,15 @@ SORT_FIELDS = {
     "created_at": Game.created_at,
     "release_year": Game.release_year,
     "purchase_date": Game.purchase_date,
+    "platform": Platform.name,
+    "format": Game.format,
+    "status": Game.status,
+    "completion": Game.completion,
+    "store": Game.store,
+    "purchase_price": Game.purchase_price,
+    "rating": Game.rating,
 }
+SORT_PATTERN = f"^-?({'|'.join(SORT_FIELDS)})$"
 
 
 def create_app(settings: Settings = default_settings, http_client: httpx.AsyncClient | None = None) -> FastAPI:
@@ -131,7 +139,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         platform_id: int | None = None,
         format: GameFormat | None = None,
         status: list[GameStatus] = Query(default=[]),
-        sort: str = Query("title", pattern="^-?(title|created_at|release_year|purchase_date)$"),
+        sort: str = Query("title", pattern=SORT_PATTERN),
         limit: int = Query(100, ge=1, le=500),
         offset: int = Query(0, ge=0),
         db: Session = Depends(get_db),
@@ -150,8 +158,12 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         if status:
             stmt = stmt.where(Game.status.in_(status))
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-        column = SORT_FIELDS[sort.lstrip("-")]
-        order = column.desc() if sort.startswith("-") else column.asc()
+        key = sort.lstrip("-")
+        if key == "platform":
+            stmt = stmt.join(Platform, Game.platform_id == Platform.id)
+        column = SORT_FIELDS[key]
+        # Games without a value go last in either direction
+        order = (column.desc() if sort.startswith("-") else column.asc()).nulls_last()
         games = db.scalars(
             stmt.options(selectinload(Game.platform)).order_by(order, Game.id).limit(limit).offset(offset)
         ).all()

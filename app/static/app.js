@@ -170,16 +170,85 @@ function setTab(name) {
 const PAGE_SIZE = 60;
 const list = { loaded: 0, total: 0, gen: 0, loading: false };
 
+const VIEWS = ["grid", "list", "table"];
+let view = "grid";
+try { if (VIEWS.includes(localStorage.getItem("glm-view"))) view = localStorage.getItem("glm-view"); } catch {}
+
+const badges = (g) =>
+  `<span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}`;
+
 const cardHtml = (g) => `
     <article class="card" data-id="${g.id}">
       <div class="cover">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "🎮"}</div>
       <div class="info">
         <div class="title">${esc(g.title)}</div>
         <div class="meta">${esc(g.platform.name)}${g.release_year ? " · " + g.release_year : ""}</div>
-        <span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
+        <span>${badges(g)}</span>
         ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
     </article>`;
+
+// [sort key, header]; the key is the API's sort field
+const COLUMNS = [
+  ["title", "Título"], ["platform", "Plataforma"], ["release_year", "Año"], ["format", "Formato"],
+  ["status", "Estado"], ["completion", "Progreso"], ["store", "Tienda"], ["purchase_date", "Fecha compra"],
+  ["purchase_price", "Precio"], ["rating", "Nota"],
+];
+
+function tableHead() {
+  const sort = $("#sort").value;
+  const th = ([key, label]) => {
+    const dir = sort === key ? "asc" : sort === `-${key}` ? "desc" : null;
+    return `<th data-sort="${key}"${dir ? ` aria-sort="${dir === "asc" ? "ascending" : "descending"}"` : ""} title="Ordenar por ${label}">${label}${dir ? (dir === "asc" ? " ▲" : " ▼") : ""}</th>`;
+  };
+  return `<table class="games"><thead><tr><th></th>${COLUMNS.map(th).join("")}</tr></thead><tbody></tbody></table>`;
+}
+
+// Sort by a column: same column again flips the direction. Columns that are not in the
+// sort menu get a temporary option, so the menu always shows the current order.
+function sortBy(key) {
+  const select = $("#sort");
+  const value = select.value === key ? `-${key}` : key;
+  let option = [...select.options].find((o) => o.value === value);
+  if (!option) {
+    option = $("#sort-column") ?? select.appendChild(Object.assign(document.createElement("option"), { id: "sort-column" }));
+    option.value = value;
+    option.textContent = `${COLUMNS.find(([k]) => k === key)[1]} ${value.startsWith("-") ? "▼" : "▲"}`;
+  }
+  select.value = value;
+  loadGames();
+}
+
+const rowHtml = (g) => `
+    <tr data-id="${g.id}">
+      <td class="c">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "<span>🎮</span>"}</td>
+      <td class="t">${esc(g.title)}${g.item_type ? ` <span class="badge">${esc(g.item_type)}</span>` : ""}</td>
+      <td>${esc(g.platform.name)}</td>
+      <td class="num">${g.release_year ?? ""}</td>
+      <td>${FORMAT[g.format]}</td>
+      <td>${STATUS[g.status]}${g.loaned_to ? ` → ${esc(g.loaned_to)}` : ""}</td>
+      <td>${COMPLETION[g.completion] ?? ""}</td>
+      <td>${esc(g.store)}</td>
+      <td class="num">${esc(g.purchase_date)}</td>
+      <td class="num">${g.purchase_price != null ? money(g.purchase_price) : ""}</td>
+      <td class="num">${g.rating != null ? `${g.rating}/10` : ""}</td>
+    </tr>`;
+
+// Where the next page of games is appended, and how each game is drawn, for the current view
+const listTarget = () => (view === "table" ? $("#grid tbody") : $("#grid"));
+const itemHtml = (g) => (view === "table" ? rowHtml(g) : cardHtml(g));
+
+function resetGrid() {
+  $("#grid").className = `grid ${view === "grid" ? "" : view}`.trim();
+  $("#grid").innerHTML = view === "table" ? tableHead() : "";
+}
+
+function setView(name) {
+  view = name;
+  try { localStorage.setItem("glm-view", name); } catch {}
+  document.querySelectorAll(".views [data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === name)));
+  loadGames(true);
+}
 
 function listParams() {
   const params = new URLSearchParams();
@@ -214,7 +283,7 @@ async function loadMore() {
     params.set("offset", list.loaded);
     const page = await api(`/api/games?${params}`);
     if (gen !== list.gen) return;
-    $("#grid").insertAdjacentHTML("beforeend", page.items.map(cardHtml).join(""));
+    listTarget().insertAdjacentHTML("beforeend", page.items.map(itemHtml).join(""));
     list.loaded += page.items.length;
     list.total = page.total;
     $("#empty").hidden = page.total > 0;
@@ -235,7 +304,7 @@ async function loadGames(keep = false) {
   list.loaded = 0;
   list.total = 0;
   list.loading = false;
-  $("#grid").innerHTML = "";
+  resetGrid();
   await loadMore();
   while (list.loaded < Math.min(target, list.total) && !list.loading) {
     const before = list.loaded;
@@ -393,7 +462,9 @@ $("#steam-import-btn").addEventListener("click", async () => {
 $("#cancel-btn").addEventListener("click", () => $("#dlg").close());
 $("#add-btn").addEventListener("click", () => openDialog(null));
 $("#grid").addEventListener("click", async (ev) => {
-  const card = ev.target.closest(".card");
+  const th = ev.target.closest("th[data-sort]");
+  if (th) return sortBy(th.dataset.sort);
+  const card = ev.target.closest("[data-id]");
   if (card) openDialog(await api(`/api/games/${card.dataset.id}`));
 });
 
@@ -401,6 +472,10 @@ let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadGames(), 250); });
 for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", () => loadGames());
 $("#more-btn").addEventListener("click", loadMore);
+document.querySelectorAll(".views [data-view]").forEach((b) => {
+  b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  b.addEventListener("click", () => setView(b.dataset.view));
+});
 
 let scrapePoll = null;
 
