@@ -1,6 +1,16 @@
+import re
 from dataclasses import dataclass, field
 
 import httpx
+
+_URL_QUERY = re.compile(r"(https?://[^\s'\"?]+)\?[^\s'\"]*")
+
+
+def error_message(exc: Exception) -> str:
+    """Error text safe to show in the UI: providers put API keys and passwords in query strings."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return _URL_QUERY.sub(r"\1", str(exc)) or exc.__class__.__name__
 
 
 @dataclass

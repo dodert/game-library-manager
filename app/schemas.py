@@ -22,17 +22,17 @@ class GameBase(BaseModel):
     format: GameFormat
     status: GameStatus = GameStatus.owned
     completion: CompletionStatus = CompletionStatus.unplayed
-    store: str | None = None
-    edition: str | None = None
-    region: str | None = None
-    barcode: str | None = None
+    store: str | None = Field(default=None, max_length=100)
+    edition: str | None = Field(default=None, max_length=150)
+    region: str | None = Field(default=None, max_length=20)
+    barcode: str | None = Field(default=None, max_length=50)
     release_year: int | None = Field(default=None, ge=1950, le=2100)
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
-    loaned_to: str | None = None
+    loaned_to: str | None = Field(default=None, max_length=150)
     loaned_at: date | None = None
     loan_due: date | None = None
     publisher: str | None = Field(default=None, max_length=150)
@@ -66,17 +66,17 @@ class GameUpdate(BaseModel):
     format: GameFormat | None = None
     status: GameStatus | None = None
     completion: CompletionStatus | None = None
-    store: str | None = None
-    edition: str | None = None
-    region: str | None = None
-    barcode: str | None = None
+    store: str | None = Field(default=None, max_length=100)
+    edition: str | None = Field(default=None, max_length=150)
+    region: str | None = Field(default=None, max_length=20)
+    barcode: str | None = Field(default=None, max_length=50)
     release_year: int | None = Field(default=None, ge=1950, le=2100)
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
-    loaned_to: str | None = None
+    loaned_to: str | None = Field(default=None, max_length=150)
     loaned_at: date | None = None
     loan_due: date | None = None
     publisher: str | None = Field(default=None, max_length=150)
@@ -98,6 +98,13 @@ class GameUpdate(BaseModel):
     rating: int | None = Field(default=None, ge=0, le=10)
     tags: str | None = Field(default=None, max_length=500)
     completed_at: date | None = None
+
+    @model_validator(mode="after")
+    def _required_not_null(self):
+        for name in ("title", "platform_id", "format", "status", "completion"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be empty")
+        return self
 
 
 class GameOut(GameBase):

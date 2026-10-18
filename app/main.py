@@ -1,12 +1,11 @@
 import asyncio
-import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select, text
@@ -17,10 +16,10 @@ from . import __version__
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
-from .images import IMAGE_TYPES, ImageError, fetch_image, save_first_cover
+from .images import IMAGE_TYPES, MAX_IMAGE_BYTES, ImageError, fetch_image, save_first_cover
 from .migrate import upgrade_database
 from .models import Game, GameFormat, GameStatus, Platform
-from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider
+from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider, error_message
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
@@ -82,6 +81,13 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     version = settings.app_version if settings.app_version and settings.app_version != "dev" else __version__
     app = FastAPI(title="Game Library Manager", version=version, lifespan=lifespan)
+
+    @app.middleware("http")
+    async def reject_cross_site_writes(request: Request, call_next):
+        # No login, so another website open in the browser could post forms here (e.g. a CSV import)
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("sec-fetch-site") == "cross-site":
+            return Response("Cross-site request blocked", status_code=403)
+        return await call_next(request)
 
     def get_db():
         with SessionLocal() as db:
@@ -207,9 +213,11 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         ext = ALLOWED_COVER_TYPES.get(file.content_type or "")
         if not ext:
             raise HTTPException(415, "Cover must be JPEG, PNG or WebP")
+        content = file.file.read(MAX_IMAGE_BYTES + 1)
+        if len(content) > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "Cover too large (max 10 MB)")
         filename = f"{game.id}-{uuid.uuid4().hex[:8]}{ext}"
-        with (covers_dir / filename).open("wb") as out:
-            shutil.copyfileobj(file.file, out)
+        (covers_dir / filename).write_bytes(content)
         replace_cover(game, filename)
         db.commit()
         return to_out(get_game_or_404(db, game_id))
@@ -238,7 +246,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         results, errors = [], {}
         for p, outcome in zip(selected, outcomes):
             if isinstance(outcome, Exception):
-                errors[p.name] = str(outcome) or outcome.__class__.__name__
+                errors[p.name] = error_message(outcome)
             else:
                 results.extend(outcome)
         return results, errors
@@ -260,7 +268,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         try:
             content, content_type = await fetch_image(http, get_provider(provider), url)
         except (ImageError, httpx.HTTPError) as exc:
-            raise HTTPException(502, str(exc) or "Image download failed")
+            raise HTTPException(502, error_message(exc))
         return Response(content, media_type=content_type, headers={"Cache-Control": "max-age=86400"})
 
     @app.post("/api/games/{game_id}/cover/fetch", response_model=GameOut)
@@ -323,7 +331,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         try:
             owned = await steam.owned_games()
         except httpx.HTTPError as exc:
-            raise HTTPException(502, f"Steam API error: {exc}")
+            raise HTTPException(502, f"Steam API error: {error_message(exc)}")
         pc = db.scalar(select(Platform).where(Platform.name == "PC"))
         existing = set(db.scalars(select(Game.steam_appid).where(Game.steam_appid.is_not(None))))
         new_games = [

@@ -16,10 +16,11 @@ from pathlib import Path
 import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload, sessionmaker
+from sqlalchemy.orm.exc import StaleDataError
 
 from .images import ImageError, save_first_cover
 from .models import Game
-from .providers import MetadataProvider, SearchResult
+from .providers import MetadataProvider, SearchResult, error_message
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .text import clean_html
 
@@ -199,10 +200,10 @@ class Scraper:
                 return
             self.status.current = game.title
             title, platform = game.title, game.platform.name
+            cover = None
             try:
                 results = await self._search(title)
                 matches = rank_results(title, platform, results)
-                cover = None
                 if covers and (replace_cover or not game.cover_path):
                     cover = await self._download_cover(game, matches)
                 if cover:
@@ -220,12 +221,17 @@ class Scraper:
                     game.scrape_error = "Sin resultados"
             except Exception as exc:  # one bad game must not stop the batch
                 self.status.failed += 1
-                message = str(exc) or exc.__class__.__name__
+                message = error_message(exc)
                 game.scrape_error = message[:300]
                 if len(self.status.errors) < 20:
                     self.status.errors.append(f"{title}: {message}")
             game.scraped_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            db.commit()
+            try:
+                db.commit()
+            except StaleDataError:  # deleted while it was being looked up; carry on with the rest
+                db.rollback()
+                if cover:
+                    (self.covers_dir / cover).unlink(missing_ok=True)
 
     async def _search(self, title: str) -> list[SearchResult]:
         providers = self._selected or self.enabled_providers
@@ -233,7 +239,7 @@ class Scraper:
         results, errors = [], []
         for provider, outcome in zip(providers, outcomes):
             if isinstance(outcome, Exception):
-                errors.append(f"{provider.label}: {outcome or outcome.__class__.__name__}")
+                errors.append(f"{provider.label}: {error_message(outcome)}")
             else:
                 results.extend(outcome)
         if errors and len(errors) == len(providers):
