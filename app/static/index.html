@@ -93,6 +93,12 @@
   <section class="filters" id="filters">
     <input id="q" type="search" placeholder="Buscar título, código de barras…">
     <select id="f-platform"><option value="">Todas las plataformas</option></select>
+    <select id="f-kind">
+      <option value="">Juegos y hardware</option>
+      <option value="game">Videojuegos</option>
+      <option value="hardware">Hardware</option>
+    </select>
+    <select id="f-item-type" hidden><option value="">Todo el hardware</option></select>
     <select id="f-format">
       <option value="">Físico y digital</option>
       <option value="physical">Físico</option>
@@ -161,7 +167,13 @@
               <option value="sold">Vendido</option>
             </select>
           </label>
-          <label>Tipo de artículo <input name="item_type" maxlength="50" list="item-types" placeholder="Juego"></label>
+          <label>Tipo
+            <select id="kind">
+              <option value="game">Videojuego</option>
+              <option value="hardware">Hardware</option>
+            </select>
+          </label>
+          <label id="item-type-label" hidden>Tipo de hardware <input name="item_type" maxlength="50" list="item-types" placeholder="Console, Amiibo, Funda…"></label>
         </div>
         <div class="row">
           <label>Tienda / launcher <input name="store" maxlength="100" placeholder="Steam, PSN, eShop, GOG…"></label>

@@ -159,3 +159,27 @@ def test_explicit_delimiter(client):
     res = upload(client, text, delimiter="comma").json()
     assert res["imported"] == 0 and res["errors"][0]["message"] == "No title column found"
     assert upload(client, text, delimiter="pipe").status_code == 422
+
+
+def test_clz_hardware_filter_by_kind_and_type(client):
+    """CLZ rows with a Hardware Type are hardware; the rest are games."""
+    text = (Path(__file__).parent / "fixtures" / "clz_sample.csv").read_text(encoding="utf-8")
+    upload(client, text)
+    pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+    client.post("/api/games", json={"title": "Hades", "platform_id": pc, "format": "digital"})
+
+    def titles(**params):
+        return sorted(g["title"] for g in client.get("/api/games", params=params).json()["items"])
+
+    assert titles(kind="game") == ["Arcade Stick 8Bitdo", "Hades"]  # no Hardware Type in CLZ
+    assert len(titles(kind="hardware")) == 4
+    assert titles(kind="hardware", item_type="console") == [
+        "Game & Watch Super Mario Bros", "Game & Watch The Legend Of Zelda",
+    ]
+    assert client.get("/api/item-types").json() == [
+        {"name": "Amiibo", "count": 1}, {"name": "Console", "count": 2}, {"name": "Funda", "count": 1},
+    ]
+    stats = client.get("/api/stats").json()
+    assert stats["by_kind"] == {"game": 2, "hardware": 4}
+    assert stats["by_item_type"]["Console"] == 2
+    assert client.get("/api/games", params={"kind": "other"}).status_code == 422
