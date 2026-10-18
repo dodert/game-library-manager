@@ -93,7 +93,29 @@ def test_about_and_versioned_assets(tmp_path):
     client = TestClient(create_app(Settings(data_dir=tmp_path, git_sha="de2880af3e16", git_ref="main", build_date="2026-10-18T13:22:00Z")))
     about = client.get("/api/about").json()
     assert about["version"] == __version__ and about["commit"] == "de2880af3e16" and about["ref"] == "main"
-    assert about["database"] == "sqlite" and about["schema"] == "0004"
+    assert about["database"] == "sqlite" and about["schema"] == "0005"
     page = client.get("/")
     assert page.headers["cache-control"] == "no-cache"
     assert f"/static/app.js?v={__version__}-de2880a" in page.text and "{{" not in page.text
+
+
+def test_reset_library(client, tmp_path):
+    pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+    game = client.post("/api/games", json={"title": "Ico", "platform_id": pc, "format": "physical"}).json()
+    client.put(f"/api/games/{game['id']}/cover", files={"file": ("c.png", PNG_1PX, "image/png")})
+    client.post("/api/platforms", json={"name": "Sin plataforma"})
+    seeded = len(client.get("/api/platforms").json()) - 1
+
+    assert client.post("/api/reset", json={"confirm": "si"}).status_code == 400
+    res = client.post("/api/reset", json={"confirm": "BORRAR"}).json()
+    assert res == {"games_deleted": 1, "platforms_deleted": 1}
+    assert client.get("/api/games").json()["total"] == 0
+    assert len(client.get("/api/platforms").json()) == seeded
+    assert not any((tmp_path / "covers").iterdir())
+
+
+def test_image_version_overrides_package_version(tmp_path):
+    client = TestClient(create_app(Settings(data_dir=tmp_path, app_version="0.5.0-feat-bulk-scrape.27")))
+    assert client.get("/api/about").json()["version"] == "0.5.0-feat-bulk-scrape.27"
+    assert client.get("/api/health").json()["version"] == "0.5.0-feat-bulk-scrape.27"
+    assert "/static/app.js?v=0.5.0-feat-bulk-scrape.27" in client.get("/").text

@@ -12,10 +12,62 @@
     <div id="stats"></div>
     <button id="csv-import-btn">Importar CSV</button>
     <a id="csv-export-btn" class="button" href="/api/export/csv" download>Exportar CSV</a>
-    <input id="csv-file" type="file" accept=".csv,text/csv" hidden>
     <button id="steam-import-btn" hidden>Importar Steam</button>
+    <button id="scrape-btn">Buscar carátulas</button>
+    <button id="reset-btn" class="danger">Borrar todo</button>
     <button id="add-btn">+ Añadir juego</button>
   </header>
+
+  <div id="scrape-bar" hidden>
+    <div class="scrape-text"></div>
+    <progress max="1" value="0"></progress>
+    <button type="button" id="scrape-cancel">Cancelar</button>
+    <button type="button" id="scrape-close" hidden>Cerrar</button>
+  </div>
+
+  <dialog id="import-dlg">
+    <form method="dialog" id="import-form">
+      <h2>Importar CSV</h2>
+      <label>Archivo <input name="file" type="file" accept=".csv,.txt,text/csv" required></label>
+      <div class="row">
+        <label>Separador
+          <select name="delimiter">
+            <option value="semicolon">Punto y coma ( ; ) — CLZ</option>
+            <option value="comma">Coma ( , )</option>
+            <option value="tab">Tabulador</option>
+            <option value="auto">Detectar por la cabecera</option>
+          </select>
+        </label>
+        <label>Formato si el CSV no lo indica
+          <select name="default_format">
+            <option value="physical">Físico</option>
+            <option value="digital">Digital</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Los juegos que ya estén en la biblioteca (mismo título, plataforma y formato) se omiten.</p>
+      <menu>
+        <span class="spacer"></span>
+        <button type="button" id="import-cancel">Cancelar</button>
+        <button type="submit" class="primary">Importar</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="scrape-dlg">
+    <form method="dialog" id="scrape-form">
+      <h2>Buscar carátulas y datos</h2>
+      <p class="hint" id="scrape-providers"></p>
+      <label class="radio"><input type="radio" name="mode" value="missing" checked> <span id="scrape-missing-label">Solo los que nunca se han buscado</span></label>
+      <label class="radio"><input type="radio" name="mode" value="all"> <span id="scrape-all-label">Todos</span></label>
+      <p class="hint">Con «Todos» se reemplazan las carátulas que ya tengas. La descripción y el año solo se rellenan si están vacíos.</p>
+      <menu>
+        <span class="spacer"></span>
+        <button type="button" id="scrape-dlg-cancel">Cancelar</button>
+        <button type="submit" class="primary">Empezar</button>
+      </menu>
+    </form>
+  </dialog>
 
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="collection" aria-selected="true">Colección</button>
@@ -91,6 +143,7 @@
         </div>
         <label>Descripción <textarea name="summary" rows="3"></textarea></label>
         <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <p class="hint" id="scrape-info"></p>
       </div>
 
       <div class="pane" data-pane="details" hidden>

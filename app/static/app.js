@@ -165,6 +165,9 @@ function openDialog(game) {
     }
   }
   setPane("general");
+  $("#scrape-info").textContent = game?.scraped_at
+    ? `Última búsqueda online: ${game.scraped_at.slice(0, 16).replace("T", " ")}${game.scrape_error ? ` · ${game.scrape_error}` : ""}`
+    : "";
   $("#dlg").showModal();
 }
 
@@ -225,21 +228,35 @@ $("#delete-btn").addEventListener("click", async () => {
 $("#lookup-btn").addEventListener("click", lookup);
 document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
-$("#csv-import-btn").addEventListener("click", () => $("#csv-file").click());
-$("#csv-file").addEventListener("change", async (ev) => {
-  const file = ev.target.files[0];
-  ev.target.value = "";
-  if (!file) return;
-  const digital = confirm("¿Los juegos sin columna de formato son digitales?\nAceptar = digital · Cancelar = físico");
-  const body = new FormData();
-  body.append("file", file);
-  body.append("default_format", digital ? "digital" : "physical");
+const IMPORT_PREFS = "glm-import-prefs";
+$("#csv-import-btn").addEventListener("click", () => {
+  const form = $("#import-form");
+  form.reset();
+  try {
+    const prefs = JSON.parse(localStorage.getItem(IMPORT_PREFS) || "{}");
+    for (const key of ["delimiter", "default_format"]) if (prefs[key]) form.elements[key].value = prefs[key];
+  } catch { /* storage unavailable */ }
+  $("#import-dlg").showModal();
+});
+$("#import-cancel").addEventListener("click", () => $("#import-dlg").close());
+$("#import-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const body = new FormData(form);
+  try {
+    localStorage.setItem(IMPORT_PREFS, JSON.stringify({
+      delimiter: body.get("delimiter"), default_format: body.get("default_format"),
+    }));
+  } catch { /* storage unavailable */ }
+  $("#import-dlg").close();
   try {
     const r = await api("/api/import/csv", { method: "POST", body });
     let msg = `${r.imported} importados, ${r.skipped} omitidos (duplicados o sin título).`;
     if (r.errors.length) msg += `\n\nErrores:\n` + r.errors.slice(0, 10).map((e) => `Fila ${e.row}: ${e.message}`).join("\n");
     if (r.unmapped_columns.length) msg += `\n\nColumnas ignoradas: ${r.unmapped_columns.join(", ")}`;
     alert(msg);
+    $("#f-platform").length = 1;
+    await loadPlatforms();
     refresh();
   } catch (err) {
     alert(err.message);
@@ -266,6 +283,86 @@ let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadGames, 250); });
 for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", loadGames);
 
+let scrapePoll = null;
+
+function renderScrape(st) {
+  const bar = $("#scrape-bar");
+  if (!st.running && !st.finished_at) { bar.hidden = true; return; }
+  bar.hidden = false;
+  const progress = bar.querySelector("progress");
+  progress.max = st.total || 1;
+  progress.value = st.done;
+  const counts = `${st.covers} carátulas nuevas · ${st.found} encontrados · ${st.not_found} sin resultados` +
+    (st.failed ? ` · ${st.failed} con error` : "");
+  bar.querySelector(".scrape-text").textContent = st.running
+    ? `Buscando ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    : `${st.cancelled ? "Búsqueda cancelada" : "Búsqueda terminada"}: ${st.done}/${st.total} · ${counts}` +
+      (st.errors.length ? ` · Errores: ${st.errors.slice(0, 3).join(" | ")}` : "");
+  $("#scrape-cancel").hidden = !st.running;
+  $("#scrape-close").hidden = st.running;
+}
+
+async function pollScrape() {
+  const st = await api("/api/scrape");
+  renderScrape(st);
+  if (st.running) {
+    scrapePoll = setTimeout(pollScrape, 1500);
+    if (tab !== "stats") loadGames();
+  } else {
+    scrapePoll = null;
+    refresh();
+  }
+  return st;
+}
+
+async function openScrapeDialog() {
+  const st = await api("/api/scrape");
+  if (st.running) { renderScrape(st); return; }
+  $("#scrape-providers").textContent = `Fuentes activas: ${st.providers.join(", ") || "ninguna"}.` +
+    (st.providers.length <= 1 ? " Añade claves de IGDB, SteamGridDB o ScreenScraper para mejores resultados." : "");
+  $("#scrape-missing-label").textContent = `Solo los que nunca se han buscado (${st.never_scraped})`;
+  $("#scrape-all-label").textContent = `Todos (${st.library_total})`;
+  $("#scrape-dlg").showModal();
+}
+
+$("#scrape-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const mode = new FormData(ev.target).get("mode");
+  $("#scrape-dlg").close();
+  try {
+    renderScrape(await api("/api/scrape", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    }));
+    if (!scrapePoll) pollScrape();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$("#scrape-btn").addEventListener("click", openScrapeDialog);
+$("#scrape-dlg-cancel").addEventListener("click", () => $("#scrape-dlg").close());
+$("#scrape-cancel").addEventListener("click", async () => renderScrape(await api("/api/scrape/cancel", { method: "POST" })));
+$("#scrape-close").addEventListener("click", () => { $("#scrape-bar").hidden = true; });
+
+$("#reset-btn").addEventListener("click", async () => {
+  const answer = prompt(
+    "Se borrarán TODOS los juegos, sus carátulas y las plataformas añadidas. No se puede deshacer.\n" +
+    "Si quieres una copia, cancela y usa antes «Exportar CSV».\n\nEscribe BORRAR para confirmar:"
+  );
+  if (answer === null) return;
+  if (answer.trim().toUpperCase() !== "BORRAR") { alert("No se ha borrado nada."); return; }
+  try {
+    const r = await api("/api/reset", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "BORRAR" }),
+    });
+    alert(`Biblioteca vacía: ${r.games_deleted} juegos y ${r.platforms_deleted} plataformas añadidas borrados.`);
+    $("#f-platform").length = 1;
+    await loadPlatforms();
+    refresh();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 async function loadAbout() {
   const a = await api("/api/about");
   const commit = a.commit
@@ -279,3 +376,4 @@ async function loadAbout() {
 
 Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
 loadAbout();
+api("/api/scrape").then((st) => { if (st.running) pollScrape(); });

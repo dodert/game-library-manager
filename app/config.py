@@ -11,7 +11,11 @@ class Settings(BaseSettings):
     # postgresql+psycopg://user:pass@host:5432/games
     database_url: str = ""
 
+    # Seconds between games during a bulk cover lookup
+    scrape_delay: float = 0.5
+
     # Build info, set by the Docker image (shown in "Acerca de")
+    app_version: str = ""  # set by the image (X.Y.<CI run>); falls back to __version__
     git_sha: str = ""
     git_ref: str = ""
     build_date: str = ""

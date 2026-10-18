@@ -13,6 +13,7 @@ from datetime import date, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from .text import clean_html
 from .models import CompletionStatus, Game, GameFormat, GameStatus, Platform
 
 EXPORT_FIELDS = [
@@ -111,6 +112,18 @@ def _decode(raw: bytes) -> str:
     return raw.decode("latin-1")
 
 
+def _detect_delimiter(text: str) -> str:
+    """Pick the separator from the header row only.
+
+    csv.Sniffer looks at a whole sample, and long multi-line descriptions full of commas,
+    quotes and HTML (as in CLZ exports) can make it guess wrong or give up.
+    """
+    header = text.split("\n", 1)[0]
+    counts = {d: header.count(d) for d in (";", ",", "\t")}
+    best = max(counts, key=counts.get)
+    return best if counts[best] else ","
+
+
 def _parse_format(value: str, default: GameFormat) -> GameFormat:
     v = _norm(value)
     if not v:
@@ -191,13 +204,15 @@ def _parse_price(value: str) -> float | None:
     return float(value)
 
 
-def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplicates: bool = True) -> dict:
+DELIMITERS = {"semicolon": ";", "comma": ",", "tab": "\t"}
+
+
+def import_csv(
+    db: Session, raw: bytes, default_format: GameFormat, skip_duplicates: bool = True, delimiter: str = "auto"
+) -> dict:
     text = _decode(raw)
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
-    except csv.Error:
-        dialect = csv.excel
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+    sep = DELIMITERS.get(delimiter) or _detect_delimiter(text)
+    reader = csv.DictReader(io.StringIO(text), delimiter=sep, quotechar='"', doublequote=True)
     headers = reader.fieldnames or []
     mapping: dict[str, str] = {}
     unmapped = []
@@ -219,7 +234,7 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
     imported, skipped, errors = 0, 0, []
     for line, row in enumerate(reader, start=2):
         values = {field: (row.get(header) or "").strip() for header, field in mapping.items()}
-        title = values.get("title", "")
+        title = clean_html(values.get("title", "")) or ""
         if not title:
             skipped += 1
             continue
@@ -251,7 +266,7 @@ def import_csv(db: Session, raw: bytes, default_format: GameFormat, skip_duplica
                 "rating": min(rating, 10) if rating else None,
             }
             for field in TEXT_FIELDS:
-                fields[field] = values.get(field, "")[:TEXT_LIMITS[field]] or None
+                fields[field] = (clean_html(values.get(field, "")) or "")[:TEXT_LIMITS[field]] or None
             for field in DATE_FIELDS:
                 fields[field] = _parse_date(values.get(field, ""))
             for field in PRICE_FIELDS:

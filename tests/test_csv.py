@@ -121,3 +121,41 @@ def test_collector_fields_round_trip(client, tmp_path):
     for key, value in data.items():
         if key != "platform_id":
             assert game[key] == value, key
+
+
+def test_import_strips_html(client):
+    text = (
+        'Title;Platform;Description;Notes\n'
+        '"Game &amp; Watch";Nintendo Switch;"<p>Primera l&iacute;nea<br>Segunda <b>parte</b></p>";"<i>nota</i>"\n'
+    )
+    assert upload(client, text).json()["imported"] == 1
+    game = client.get("/api/games").json()["items"][0]
+    assert game["title"] == "Game & Watch"
+    assert game["summary"] == "Primera línea\nSegunda parte" and game["notes"] == "nota"
+
+
+def test_multiline_html_descriptions_keep_columns(client):
+    """CLZ descriptions span lines and carry commas, semicolons, quotes and HTML."""
+    desc = '<ul>\n<li>Uses Naughty Dog\'s engine; story, characters</li>\n<li><b>Down &amp; Out</b></li>\n<li>51. Ratt ""Round and Round"", 73. The Offspring</li>\n</ul>'
+    for sep in (";", ",", "\t"):
+        header = sep.join(["Platform", "Title", "Description", '"Release Year"'])
+        rows = [sep.join([f"Playstation 4", f'"Uncharted {sep!r} {i}"', f'"{desc * 3}"', "2018"]) for i in range(10)]
+        rows.append(sep.join(["Sega 32X", f'"Sega 32X Unit {sep!r}"', "", ""]))
+        res = upload(client, header + "\n" + "\n".join(rows) + "\n").json()
+        assert res["imported"] == 11 and res["errors"] == [], sep
+    platforms = {p["name"] for p in client.get("/api/platforms").json()}
+    assert "PlayStation 4" in platforms and "Sega 32X" in platforms
+    assert not any("<" in p or ";" in p for p in platforms)
+    game = client.get("/api/games", params={"q": "Uncharted"}).json()["items"][0]
+    assert game["summary"].startswith("• Uses Naughty Dog's engine; story, characters\n• Down & Out")
+    assert '51. Ratt "Round and Round", 73. The Offspring' in game["summary"]
+
+
+def test_explicit_delimiter(client):
+    text = "Title;Platform;Notes\nIco;PlayStation 2;uno, dos\n"
+    res = upload(client, text, delimiter="semicolon").json()
+    assert res["imported"] == 1 and res["unmapped_columns"] == []
+    # The wrong separator leaves a single unknown column and nothing imported
+    res = upload(client, text, delimiter="comma").json()
+    assert res["imported"] == 0 and res["errors"][0]["message"] == "No title column found"
+    assert upload(client, text, delimiter="pipe").status_code == 422

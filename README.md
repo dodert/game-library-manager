@@ -14,13 +14,13 @@ Work in progress. Roadmap:
 ## Import / export
 
 - **Exportar CSV** downloads the whole library (`/api/export/csv`).
-- **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Comma, semicolon or tab separated; UTF-8 or Windows-1252. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
+- **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Pick the separator in the import dialog (semicolon for CLZ, comma or tab), or let it detect it from the header row; UTF-8 or Windows-1252. Multi-line quoted fields are supported. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. HTML in imported text (CLZ descriptions often carry `<p>`, `<br>`, `&amp;`…) is converted to plain text. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
 
 ## Docker
 
-Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` and on `v*` git tags. A push to `main` is tagged `latest`, the app version from `app/__init__.py` (e.g. `0.4.1` and `0.4`) and `sha-<commit>`. Pin a version tag in Unraid if you don't want to follow `latest`; bump `__version__` for each release so the version tag isn't reused.
+Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), built by GitHub Actions on every push to `main` and on `v*` git tags. Versions follow [SemVer](https://semver.org): `main` builds are the release version in `app/__init__.py` (`__version__`, e.g. `0.5.0`), so bump it in every PR (`Z` for fixes, `Y` for features). A push to `main` is tagged `latest`, `X.Y.Z`, `X.Y` and `sha-<commit>`. Pin a version tag in Unraid if you don't want to follow `latest`. The footer shows the version.
 
-To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`); set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
+To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`), and also as `pre-release` and a SemVer pre-release version `X.Y.Z-<branch>.<run>` (e.g. `0.5.0-feat-bulk-scrape.27`) when the branch is not `main`; pre-releases sort below the release and never take a `main` number; set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
 
 ```bash
 docker run -d --name game-library-manager -p 8000:8000 \
@@ -47,6 +47,12 @@ To list it in **Apps → Private** (Community Applications) instead, download it
 ```bash
 mkdir -p /boot/config/plugins/community.applications/private/dodert && curl -fsSL https://raw.githubusercontent.com/dodert/unraid-templates/main/game-library-manager.xml -o /boot/config/plugins/community.applications/private/dodert/game-library-manager.xml
 ```
+
+## Covers for imported games
+
+**Buscar carátulas** looks every game up in the enabled providers (IGDB, ScreenScraper, SteamGridDB and Steam, best match by title and platform) and downloads the cover. It fills the description and year only where they are empty. Choose **Solo los que nunca se han buscado** to cover games added since the last run (for example after a CSV import), or **Todos** to search the whole library again and replace existing covers. It runs in the background with a progress bar; games with no match are marked "Sin resultados" in their card's dialog. `SCRAPE_DELAY` (seconds between games, default `0.5`) keeps it inside the providers' rate limits.
+
+**Borrar todo** empties the library (games, covers and the platforms added by you or an import) after you type `BORRAR`. Export a CSV first if you want a copy.
 
 ## Run locally
 

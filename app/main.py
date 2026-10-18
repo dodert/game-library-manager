@@ -3,6 +3,7 @@ import shutil
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -23,9 +24,10 @@ from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider,
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     CoverFetchIn, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
-    ProviderOut, SteamImportOut,
+    ProviderOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
-from .seed import seed_platforms
+from .scraper import Scraper
+from .seed import DEFAULT_PLATFORMS, seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
 ALLOWED_COVER_TYPES = IMAGE_TYPES
@@ -62,12 +64,16 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         )
     }
 
+    scraper = Scraper(SessionLocal, http, providers, covers_dir, delay=settings.scrape_delay)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         yield
+        scraper.cancel()
         await http.aclose()
 
-    app = FastAPI(title="Game Library Manager", version=__version__, lifespan=lifespan)
+    version = settings.app_version if settings.app_version and settings.app_version != "dev" else __version__
+    app = FastAPI(title="Game Library Manager", version=version, lifespan=lifespan)
 
     def get_db():
         with SessionLocal() as db:
@@ -91,12 +97,12 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": version}
 
     @app.get("/api/about")
     def about(db: Session = Depends(get_db)):
         return {
-            "version": __version__,
+            "version": version,
             "commit": settings.git_sha or None,
             "ref": settings.git_ref or None,
             "build_date": settings.build_date or None,
@@ -246,6 +252,31 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         db.commit()
         return to_out(get_game_or_404(db, game_id))
 
+    def scrape_status(db: Session) -> ScrapeStatusOut:
+        return ScrapeStatusOut(
+            **scraper.status_dict(),
+            never_scraped=db.scalar(select(func.count(Game.id)).where(Game.scraped_at.is_(None))),
+            library_total=db.scalar(select(func.count(Game.id))),
+            providers=[p.label for p in scraper.enabled_providers],
+        )
+
+    @app.get("/api/scrape", response_model=ScrapeStatusOut)
+    def get_scrape(db: Session = Depends(get_db)):
+        return scrape_status(db)
+
+    @app.post("/api/scrape", response_model=ScrapeStatusOut, status_code=202)
+    async def start_scrape(data: ScrapeIn, db: Session = Depends(get_db)):
+        try:
+            scraper.start(data.mode)
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc))
+        return scrape_status(db)
+
+    @app.post("/api/scrape/cancel", response_model=ScrapeStatusOut)
+    def cancel_scrape(db: Session = Depends(get_db)):
+        scraper.cancel()
+        return scrape_status(db)
+
     async def download_steam_covers(game_ids: list[int]) -> None:
         for game_id in game_ids:
             with SessionLocal() as db:
@@ -309,6 +340,27 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             "loaned": db.scalar(select(func.count(Game.id)).where(Game.status == GameStatus.lent)),
         }
 
+    @app.post("/api/reset", response_model=ResetOut)
+    def reset_library(data: ResetIn, db: Session = Depends(get_db)):
+        """Delete every game, its cover and the platforms the user or an import added."""
+        if data.confirm != "BORRAR":
+            raise HTTPException(400, 'Send {"confirm": "BORRAR"} to delete the whole library')
+        if scraper.status.running:
+            raise HTTPException(409, "A cover lookup is running; cancel it first")
+        games = db.scalars(select(Game)).all()
+        for game in games:
+            if game.cover_path:
+                (covers_dir / game.cover_path).unlink(missing_ok=True)
+            db.delete(game)
+        db.flush()
+        defaults = {name for name, _ in DEFAULT_PLATFORMS}
+        extra = db.scalars(select(Platform).where(Platform.name.not_in(defaults))).all()
+        for platform in extra:
+            db.delete(platform)
+        db.commit()
+        seed_platforms(db)
+        return ResetOut(games_deleted=len(games), platforms_deleted=len(extra))
+
     @app.get("/api/export/csv")
     def export(db: Session = Depends(get_db)):
         return Response(
@@ -322,18 +374,19 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         file: UploadFile = File(...),
         default_format: GameFormat = Form(GameFormat.physical),
         skip_duplicates: bool = Form(True),
+        delimiter: Literal["auto", "semicolon", "comma", "tab"] = Form("auto"),
         db: Session = Depends(get_db),
     ):
         raw = file.file.read(MAX_CSV_BYTES + 1)
         if len(raw) > MAX_CSV_BYTES:
             raise HTTPException(413, "CSV too large")
-        return import_csv(db, raw, default_format, skip_duplicates)
+        return import_csv(db, raw, default_format, skip_duplicates, delimiter)
 
     app.mount("/covers", StaticFiles(directory=covers_dir), name="covers")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     # Version the asset URLs so browsers fetch the new JS/CSS after an image update
-    asset_version = f"{__version__}-{settings.git_sha[:7]}" if settings.git_sha else __version__
+    asset_version = f"{version}-{settings.git_sha[:7]}" if settings.git_sha else version
     index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
 
     @app.get("/", include_in_schema=False)
