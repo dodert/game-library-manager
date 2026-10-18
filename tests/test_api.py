@@ -1,0 +1,80 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import create_app
+
+PNG_1PX = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082"
+)
+
+
+@pytest.fixture
+def client(tmp_path):
+    return TestClient(create_app(Settings(data_dir=tmp_path, database_url="")))
+
+
+def platform_id(client, name="PlayStation 5"):
+    return next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == name)
+
+
+def test_health_and_seeded_platforms(client):
+    assert client.get("/api/health").json()["status"] == "ok"
+    names = {p["name"] for p in client.get("/api/platforms").json()}
+    assert {"PC", "Nintendo Switch", "PlayStation 5"} <= names
+
+
+def test_game_crud(client):
+    pid = platform_id(client)
+    res = client.post("/api/games", json={"title": "Astro Bot", "platform_id": pid, "format": "physical"})
+    assert res.status_code == 201
+    game = res.json()
+    assert game["platform"]["name"] == "PlayStation 5"
+    assert game["status"] == "owned"
+
+    res = client.patch(f"/api/games/{game['id']}", json={"completion": "completed", "purchase_price": 59.99})
+    assert res.json()["completion"] == "completed"
+    assert res.json()["purchase_price"] == 59.99
+
+    assert client.delete(f"/api/games/{game['id']}").status_code == 204
+    assert client.get(f"/api/games/{game['id']}").status_code == 404
+
+
+def test_unknown_platform_rejected(client):
+    res = client.post("/api/games", json={"title": "X", "platform_id": 9999, "format": "digital"})
+    assert res.status_code == 422
+
+
+def test_filters_search_and_stats(client):
+    ps5, pc = platform_id(client), platform_id(client, "PC")
+    client.post("/api/games", json={"title": "Elden Ring", "platform_id": pc, "format": "digital", "store": "Steam"})
+    client.post("/api/games", json={"title": "Astro Bot", "platform_id": ps5, "format": "physical", "barcode": "711719"})
+    client.post("/api/games", json={"title": "Hades II", "platform_id": pc, "format": "digital", "status": "wishlist"})
+
+    assert client.get("/api/games", params={"format": "digital"}).json()["total"] == 2
+    assert client.get("/api/games", params={"q": "elden"}).json()["items"][0]["title"] == "Elden Ring"
+    assert client.get("/api/games", params={"q": "711719"}).json()["total"] == 1
+    assert client.get("/api/games", params={"status": "wishlist"}).json()["total"] == 1
+    titles = [g["title"] for g in client.get("/api/games", params={"sort": "-title"}).json()["items"]]
+    assert titles == ["Hades II", "Elden Ring", "Astro Bot"]
+
+    stats = client.get("/api/stats").json()
+    assert stats == {"total": 3, "by_platform": {"PC": 2, "PlayStation 5": 1}, "by_format": {"digital": 2, "physical": 1}}
+
+
+def test_cover_upload(client, tmp_path):
+    game = client.post("/api/games", json={"title": "Celeste", "platform_id": platform_id(client, "PC"), "format": "digital"}).json()
+    res = client.put(f"/api/games/{game['id']}/cover", files={"file": ("c.png", PNG_1PX, "image/png")})
+    assert res.status_code == 200
+    url = res.json()["cover_url"]
+    assert client.get(url).content == PNG_1PX
+
+    bad = client.put(f"/api/games/{game['id']}/cover", files={"file": ("c.txt", b"x", "text/plain")})
+    assert bad.status_code == 415
+
+
+def test_index_served(client):
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "Mi biblioteca" in res.text
