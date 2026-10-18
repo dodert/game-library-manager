@@ -72,11 +72,16 @@ function applyResult(r) {
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
   if (r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
-    $("#cover-preview").hidden = false;
-    $("#cover-preview img").src = proxied(r.provider, r.thumb_url || r.cover_urls[0]);
+    showCover(proxied(r.provider, r.thumb_url || r.cover_urls[0]), proxied(r.provider, r.cover_urls[0]));
     $("#cover-preview span").textContent = "Esta carátula se descargará al guardar";
   }
   $("#lookup").hidden = true;
+}
+
+function showCover(src, full = src) {
+  $("#cover-preview").hidden = false;
+  $("#cover-preview img").src = src;
+  $("#cover-preview a").href = full;
 }
 
 async function searchCovers() {
@@ -109,8 +114,7 @@ async function searchCovers() {
       document.querySelectorAll(".cover-opt").forEach((b) => b.setAttribute("aria-pressed", String(b === el)));
       form.elements.cover.value = "";
       pendingCover = { provider: o.provider, urls: o.urls };
-      $("#cover-preview").hidden = false;
-      $("#cover-preview img").src = proxied(o.provider, o.thumb_url);
+      showCover(proxied(o.provider, o.thumb_url), proxied(o.provider, o.urls[0]));
       $("#cover-preview span").textContent = `Carátula de ${label(o.provider)}: se descargará al guardar`;
     };
   } catch (err) {
@@ -197,7 +201,7 @@ function openDialog(game) {
   $("#cover-preview").hidden = !game?.cover_url;
   $("#cover-picker").hidden = true;
   if (game?.cover_url) {
-    $("#cover-preview img").src = game.cover_url;
+    showCover(game.cover_url);
     $("#cover-preview span").textContent = "Carátula actual";
   }
   $("#dlg-title").textContent = game ? "Editar juego" : "Añadir juego";
@@ -271,6 +275,13 @@ $("#delete-btn").addEventListener("click", async () => {
 
 $("#lookup-btn").addEventListener("click", lookup);
 $("#covers-btn").addEventListener("click", searchCovers);
+$("#game-form").elements.cover.addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  pendingCover = null;
+  showCover(URL.createObjectURL(file));
+  $("#cover-preview span").textContent = "Esta imagen se subirá al guardar";
+});
 document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
 const IMPORT_PREFS = "glm-import-prefs";

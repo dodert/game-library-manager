@@ -42,7 +42,7 @@ menu { display: flex; gap: .5rem; padding: 0; margin: 1rem 0 0; }
 .result .r-title { font-weight: 600; }
 .result .r-meta { font-size: .78rem; color: var(--muted); }
 #cover-preview { display: flex; gap: .6rem; align-items: center; margin-bottom: .6rem; font-size: .8rem; color: var(--muted); }
-#cover-preview img { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; }
+#cover-preview img { width: 120px; height: 180px; object-fit: cover; border-radius: 6px; background: var(--border); cursor: zoom-in; }
 .cover-row { align-items: end; }
 .cover-row button { flex: 0 0 auto; }
 #cover-picker { border: 1px solid var(--border); border-radius: 8px; padding: .5rem; margin-bottom: .6rem; max-height: 360px; overflow-y: auto; }
