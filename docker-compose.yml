@@ -1,0 +1,25 @@
+services:
+  game-library-manager:
+    image: ghcr.io/dodert/game-library-manager:latest
+    container_name: game-library-manager
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+      # Optional: use PostgreSQL instead of SQLite
+      # - DATABASE_URL=postgresql+psycopg://games:games@postgres:5432/games
+      # Metadata and cover providers (each is optional)
+      - IGDB_CLIENT_ID=
+      - IGDB_CLIENT_SECRET=
+      - STEAMGRIDDB_API_KEY=
+      - STEAM_API_KEY=
+      - STEAM_ID=
+      - SCREENSCRAPER_DEV_ID=
+      - SCREENSCRAPER_DEV_PASSWORD=
+      - SCREENSCRAPER_USER=
+      - SCREENSCRAPER_PASSWORD=
+    restart: unless-stopped
