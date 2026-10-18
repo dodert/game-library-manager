@@ -23,10 +23,10 @@ from .models import Game, GameFormat, GameStatus, Platform
 from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
-    CoverFetchIn, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
+    CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
     ProviderOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
-from .scraper import Scraper
+from .scraper import Scraper, cover_options
 from .seed import DEFAULT_PLATFORMS, seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -220,8 +220,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             for p in providers.values()
         ]
 
-    @app.get("/api/metadata/search", response_model=MetadataSearchOut)
-    async def metadata_search(q: str = Query(min_length=1), provider: str | None = None):
+    async def search_providers(q: str, provider: str | None = None):
         selected = [get_provider(provider)] if provider else [p for p in providers.values() if p.enabled]
         outcomes = await asyncio.gather(*(p.search(q) for p in selected), return_exceptions=True)
         results, errors = [], {}
@@ -230,7 +229,18 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
                 errors[p.name] = str(outcome) or outcome.__class__.__name__
             else:
                 results.extend(outcome)
+        return results, errors
+
+    @app.get("/api/metadata/search", response_model=MetadataSearchOut)
+    async def metadata_search(q: str = Query(min_length=1), provider: str | None = None):
+        results, errors = await search_providers(q, provider)
         return MetadataSearchOut(results=[r.__dict__ for r in results], errors=errors)
+
+    @app.get("/api/covers/search", response_model=CoverSearchOut)
+    async def cover_search(q: str = Query(min_length=1), platform: str = ""):
+        """All covers the providers have for a title, to pick one by hand (closest title matches first)."""
+        results, errors = await search_providers(q)
+        return CoverSearchOut(options=cover_options(q, platform, results, providers), errors=errors)
 
     @app.get("/api/metadata/image")
     async def metadata_image(provider: str, url: str):

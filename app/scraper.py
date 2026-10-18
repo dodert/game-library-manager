@@ -56,6 +56,31 @@ def rank_results(game_title: str, platform: str, results: list[SearchResult]) ->
     return [r for _, r in good]
 
 
+MAX_COVER_OPTIONS = 60
+
+
+def cover_options(game_title: str, platform: str, results: list[SearchResult],
+                  providers: dict[str, MetadataProvider]) -> list[dict]:
+    """Every cover the results offer, one entry per distinct image: title matches first, then the rest."""
+    order = {name: i for i, name in enumerate(PROVIDER_ORDER)}
+    scored = sorted(
+        ((match_score(game_title, platform, r), r) for r in results if r.cover_urls),
+        key=lambda sr: (-(round(sr[0], 2) >= MIN_SCORE), -round(sr[0], 2), order.get(sr[1].provider, len(order))),
+    )
+    options = []
+    for score, r in scored:
+        provider = providers.get(r.provider)
+        base = {"provider": r.provider, "title": r.title, "platforms": r.platforms,
+                "release_year": r.release_year, "matches": score >= MIN_SCORE}
+        if provider and provider.cover_urls_are_fallbacks:
+            options.append(base | {"urls": r.cover_urls, "thumb_url": r.thumb_url or r.cover_urls[0]})
+        else:
+            for i, url in enumerate(r.cover_urls):
+                thumb = r.cover_thumbs[i] if i < len(r.cover_thumbs) else (r.thumb_url if i == 0 else None)
+                options.append(base | {"urls": [url], "thumb_url": thumb or url})
+    return options[:MAX_COVER_OPTIONS]
+
+
 @dataclass
 class ScrapeStatus:
     running: bool = False

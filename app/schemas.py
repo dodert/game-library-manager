@@ -132,10 +132,26 @@ class MetadataResult(BaseModel):
     summary: str | None = None
     cover_urls: list[str] = []
     thumb_url: str | None = None
+    cover_thumbs: list[str] = []
 
 
 class MetadataSearchOut(BaseModel):
     results: list[MetadataResult]
+    errors: dict[str, str]
+
+
+class CoverOption(BaseModel):
+    provider: str
+    title: str
+    platforms: list[str] = []
+    release_year: int | None = None
+    urls: list[str]
+    thumb_url: str
+    matches: bool
+
+
+class CoverSearchOut(BaseModel):
+    options: list[CoverOption]
     errors: dict[str, str]
 
 

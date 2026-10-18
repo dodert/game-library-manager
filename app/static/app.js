@@ -72,11 +72,54 @@ function applyResult(r) {
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
   if (r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
-    $("#cover-preview").hidden = false;
-    $("#cover-preview img").src = proxied(r.provider, r.thumb_url || r.cover_urls[0]);
+    showCover(proxied(r.provider, r.thumb_url || r.cover_urls[0]), proxied(r.provider, r.cover_urls[0]));
     $("#cover-preview span").textContent = "Esta carátula se descargará al guardar";
   }
   $("#lookup").hidden = true;
+}
+
+function showCover(src, full = src) {
+  $("#cover-preview").hidden = false;
+  $("#cover-preview img").src = src;
+  $("#cover-preview a").href = full;
+}
+
+async function searchCovers() {
+  const form = $("#game-form");
+  const title = form.elements.title.value.trim();
+  if (!title) return alert("Escribe primero el título");
+  const platform = form.elements.platform_id.selectedOptions[0]?.textContent ?? "";
+  $("#cover-picker").hidden = false;
+  $("#cover-picker-grid").innerHTML = "";
+  $("#cover-picker-status").textContent = "Buscando carátulas…";
+  try {
+    const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}`);
+    const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
+    const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
+    const matching = options.filter((o) => o.matches).length;
+    $("#cover-picker-status").textContent =
+      (options.length ? `${options.length} carátulas (${matching} del mismo título). Pulsa una para elegirla.` : "No se han encontrado carátulas.") +
+      (failed.length ? ` · Error en ${failed.join(" · ")}` : "");
+    const tile = (o, i) => `<button type="button" class="cover-opt" data-i="${i}" aria-pressed="false" title="${esc(o.title)}${o.release_year ? ` (${o.release_year})` : ""} · ${esc(label(o.provider))}">
+        <img src="${esc(proxied(o.provider, o.thumb_url))}" alt="" loading="lazy">
+        <span>${esc(label(o.provider))} · ${esc(o.title)}</span>
+      </button>`;
+    const first = options.findIndex((o) => !o.matches);
+    $("#cover-picker-grid").innerHTML = options.map((o, i) =>
+      (i === first && matching ? "<h4>Otros resultados</h4>" : "") + tile(o, i)).join("");
+    $("#cover-picker-grid").onclick = (ev) => {
+      const el = ev.target.closest(".cover-opt");
+      if (!el) return;
+      const o = options[Number(el.dataset.i)];
+      document.querySelectorAll(".cover-opt").forEach((b) => b.setAttribute("aria-pressed", String(b === el)));
+      form.elements.cover.value = "";
+      pendingCover = { provider: o.provider, urls: o.urls };
+      showCover(proxied(o.provider, o.thumb_url), proxied(o.provider, o.urls[0]));
+      $("#cover-preview span").textContent = `Carátula de ${label(o.provider)}: se descargará al guardar`;
+    };
+  } catch (err) {
+    $("#cover-picker-status").textContent = err.message;
+  }
 }
 
 const money = (n) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
@@ -155,7 +198,12 @@ function openDialog(game) {
   form.reset();
   pendingCover = null;
   $("#lookup").hidden = true;
-  $("#cover-preview").hidden = true;
+  $("#cover-preview").hidden = !game?.cover_url;
+  $("#cover-picker").hidden = true;
+  if (game?.cover_url) {
+    showCover(game.cover_url);
+    $("#cover-preview span").textContent = "Carátula actual";
+  }
   $("#dlg-title").textContent = game ? "Editar juego" : "Añadir juego";
   $("#delete-btn").hidden = !game;
   form.elements.id.value = game?.id ?? "";
@@ -226,6 +274,14 @@ $("#delete-btn").addEventListener("click", async () => {
 });
 
 $("#lookup-btn").addEventListener("click", lookup);
+$("#covers-btn").addEventListener("click", searchCovers);
+$("#game-form").elements.cover.addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  pendingCover = null;
+  showCover(URL.createObjectURL(file));
+  $("#cover-preview span").textContent = "Esta imagen se subirá al guardar";
+});
 document.querySelectorAll(".tabs:not(.dlg-tabs) [role=tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.addEventListener("click", () => setPane(b.dataset.pane)));
 const IMPORT_PREFS = "glm-import-prefs";
