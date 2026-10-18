@@ -15,7 +15,7 @@ def test_migrations_match_models(tmp_path):
 
 
 def test_legacy_v01_database_is_upgraded(tmp_path):
-    """A database created by v0.1 (create_all, no alembic_version) keeps its data and gains new columns."""
+    """A database created by v0.1 (create_all, no alembic_version) keeps its data and gains new columns up to the latest revision."""
     engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE platforms (id INTEGER PRIMARY KEY, name VARCHAR(100) UNIQUE NOT NULL, manufacturer VARCHAR(100))"))
@@ -32,10 +32,10 @@ def test_legacy_v01_database_is_upgraded(tmp_path):
     upgrade_database(engine)
 
     columns = {c["name"] for c in inspect(engine).get_columns("games")}
-    assert {"summary", "steam_appid"} <= columns
+    assert {"summary", "steam_appid", "loaned_to", "loaned_at"} <= columns
     with engine.connect() as conn:
         assert conn.execute(text("SELECT title FROM games")).scalar() == "Doom"
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"
 
 
 def test_upgrade_is_idempotent(tmp_path):

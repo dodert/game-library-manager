@@ -31,6 +31,8 @@ class GameBase(BaseModel):
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
+    loaned_to: str | None = None
+    loaned_at: date | None = None
 
 
 class GameIn(GameBase):
@@ -53,6 +55,8 @@ class GameUpdate(BaseModel):
     notes: str | None = None
     summary: str | None = None
     steam_appid: int | None = None
+    loaned_to: str | None = None
+    loaned_at: date | None = None
 
 
 class GameOut(GameBase):
@@ -100,3 +104,15 @@ class CoverFetchIn(BaseModel):
 class SteamImportOut(BaseModel):
     imported: int
     skipped: int
+
+
+class ImportRowError(BaseModel):
+    row: int
+    message: str
+
+
+class CsvImportOut(BaseModel):
+    imported: int
+    skipped: int
+    errors: list[ImportRowError]
+    unmapped_columns: list[str]

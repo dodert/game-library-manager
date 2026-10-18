@@ -58,6 +58,8 @@ class Game(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
     steam_appid: Mapped[int | None] = mapped_column(index=True)
+    loaned_to: Mapped[str | None] = mapped_column(String(150))
+    loaned_at: Mapped[date | None] = mapped_column(Date)
     cover_path: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
