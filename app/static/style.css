@@ -70,3 +70,5 @@ form input, form select, form textarea { width: 100%; min-width: 0; }
 form input[type=file] { width: auto; }
 .dlg-tabs { flex-wrap: nowrap; overflow-x: auto; }
 .dlg-tabs button { white-space: nowrap; padding: .4rem .7rem; }
+footer { padding: 1rem; text-align: center; font-size: .75rem; color: var(--muted); border-top: 1px solid var(--border); }
+footer a { color: inherit; }

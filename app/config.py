@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     # postgresql+psycopg://user:pass@host:5432/games
     database_url: str = ""
 
+    # Build info, set by the Docker image (shown in "Acerca de")
+    git_sha: str = ""
+    git_ref: str = ""
+    build_date: str = ""
+
     # Metadata / cover providers. Each one is enabled when its credentials are set.
     igdb_client_id: str = ""
     igdb_client_secret: str = ""

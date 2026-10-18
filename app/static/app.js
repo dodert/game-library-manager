@@ -266,4 +266,16 @@ let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadGames, 250); });
 for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", loadGames);
 
+async function loadAbout() {
+  const a = await api("/api/about");
+  const commit = a.commit
+    ? ` · <a href="https://github.com/dodert/game-library-manager/commit/${esc(a.commit)}" target="_blank" rel="noopener">${esc(a.commit.slice(0, 7))}</a>`
+    : "";
+  const built = a.build_date ? ` · compilada ${esc(a.build_date.slice(0, 16).replace("T", " "))} UTC` : "";
+  const db = a.database === "postgresql" ? "PostgreSQL" : a.database === "sqlite" ? "SQLite" : a.database;
+  $("#about").innerHTML =
+    `Game Library Manager v${esc(a.version)}${a.ref ? ` (${esc(a.ref)})` : ""}${commit}${built} · ${esc(db)}, esquema ${esc(a.schema)}`;
+}
+
 Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
+loadAbout();
