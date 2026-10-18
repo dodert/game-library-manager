@@ -4,6 +4,8 @@
 
 Self-hosted app to catalogue your video game collection — physical and digital, every console and PC — with cover art fetched from public sources. Inspired by CLZ Games.
 
+> **Note:** this project has been almost entirely vibe-coded, built with an AI coding assistant ([Claude Code](https://claude.com/claude-code)) and reviewed and tested by its author.
+
 ## Status
 
 Work in progress. Roadmap:
