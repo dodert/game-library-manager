@@ -56,6 +56,8 @@ class Game(Base):
     purchase_date: Mapped[date | None] = mapped_column(Date)
     purchase_price: Mapped[float | None] = mapped_column(Numeric(10, 2, asdecimal=False))
     notes: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    steam_appid: Mapped[int | None] = mapped_column(index=True)
     cover_path: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

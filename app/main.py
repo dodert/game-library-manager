@@ -1,9 +1,12 @@
+import asyncio
 import shutil
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+import httpx
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -12,12 +15,19 @@ from sqlalchemy.orm import Session, selectinload
 from . import __version__
 from .config import Settings, settings as default_settings
 from .db import Base, make_engine, make_sessionmaker
+from .images import IMAGE_TYPES, ImageError, fetch_image, save_first_cover
 from .models import Game, GameFormat, GameStatus, Platform
-from .schemas import GameIn, GameOut, GamePage, GameUpdate, PlatformIn, PlatformOut
+from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider
+from .providers.steam import cover_candidates as steam_cover_candidates
+from .schemas import (
+    CoverFetchIn, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
+    ProviderOut, SteamImportOut,
+)
 from .seed import seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
-ALLOWED_COVER_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+ALLOWED_COVER_TYPES = IMAGE_TYPES
+USER_AGENT = f"game-library-manager/{__version__}"
 SORT_FIELDS = {
     "title": Game.title,
     "created_at": Game.created_at,
@@ -26,7 +36,7 @@ SORT_FIELDS = {
 }
 
 
-def create_app(settings: Settings = default_settings) -> FastAPI:
+def create_app(settings: Settings = default_settings, http_client: httpx.AsyncClient | None = None) -> FastAPI:
     engine = make_engine(settings.resolved_database_url)
     SessionLocal = make_sessionmaker(engine)
     Base.metadata.create_all(engine)
@@ -34,7 +44,27 @@ def create_app(settings: Settings = default_settings) -> FastAPI:
         seed_platforms(db)
     covers_dir = settings.covers_dir
 
-    app = FastAPI(title="Game Library Manager", version=__version__)
+    http = http_client or httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT})
+    steam = SteamProvider(http, settings.steam_api_key, settings.steam_id)
+    providers = {
+        p.name: p
+        for p in (
+            IGDBProvider(http, settings.igdb_client_id, settings.igdb_client_secret),
+            SteamGridDBProvider(http, settings.steamgriddb_api_key),
+            steam,
+            ScreenScraperProvider(
+                http, settings.screenscraper_dev_id, settings.screenscraper_dev_password,
+                settings.screenscraper_user, settings.screenscraper_password,
+            ),
+        )
+    }
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        await http.aclose()
+
+    app = FastAPI(title="Game Library Manager", version=__version__, lifespan=lifespan)
 
     def get_db():
         with SessionLocal() as db:
@@ -145,11 +175,100 @@ def create_app(settings: Settings = default_settings) -> FastAPI:
         filename = f"{game.id}-{uuid.uuid4().hex[:8]}{ext}"
         with (covers_dir / filename).open("wb") as out:
             shutil.copyfileobj(file.file, out)
+        replace_cover(game, filename)
+        db.commit()
+        return to_out(get_game_or_404(db, game_id))
+
+    def get_provider(name: str):
+        provider = providers.get(name)
+        if not provider or not provider.enabled:
+            raise HTTPException(404, f"Provider '{name}' not available")
+        return provider
+
+    def replace_cover(game: Game, filename: str) -> None:
         if game.cover_path:
             (covers_dir / game.cover_path).unlink(missing_ok=True)
         game.cover_path = filename
+
+    @app.get("/api/providers", response_model=list[ProviderOut])
+    def list_providers():
+        return [
+            ProviderOut(name=p.name, label=p.label, enabled=p.enabled, can_import=p is steam and steam.can_import)
+            for p in providers.values()
+        ]
+
+    @app.get("/api/metadata/search", response_model=MetadataSearchOut)
+    async def metadata_search(q: str = Query(min_length=1), provider: str | None = None):
+        selected = [get_provider(provider)] if provider else [p for p in providers.values() if p.enabled]
+        outcomes = await asyncio.gather(*(p.search(q) for p in selected), return_exceptions=True)
+        results, errors = [], {}
+        for p, outcome in zip(selected, outcomes):
+            if isinstance(outcome, Exception):
+                errors[p.name] = str(outcome) or outcome.__class__.__name__
+            else:
+                results.extend(outcome)
+        return MetadataSearchOut(results=[r.__dict__ for r in results], errors=errors)
+
+    @app.get("/api/metadata/image")
+    async def metadata_image(provider: str, url: str):
+        """Image proxy so thumbnails load without exposing provider credentials to the browser."""
+        try:
+            content, content_type = await fetch_image(http, get_provider(provider), url)
+        except (ImageError, httpx.HTTPError) as exc:
+            raise HTTPException(502, str(exc) or "Image download failed")
+        return Response(content, media_type=content_type, headers={"Cache-Control": "max-age=86400"})
+
+    @app.post("/api/games/{game_id}/cover/fetch", response_model=GameOut)
+    async def fetch_cover(game_id: int, data: CoverFetchIn, db: Session = Depends(get_db)):
+        game = get_game_or_404(db, game_id)
+        try:
+            filename = await save_first_cover(http, get_provider(data.provider), data.urls, covers_dir, game.id)
+        except ImageError as exc:
+            raise HTTPException(502, f"Could not download cover: {exc}")
+        replace_cover(game, filename)
         db.commit()
         return to_out(get_game_or_404(db, game_id))
+
+    async def download_steam_covers(game_ids: list[int]) -> None:
+        for game_id in game_ids:
+            with SessionLocal() as db:
+                game = db.get(Game, game_id)
+                if not game or game.cover_path or not game.steam_appid:
+                    continue
+                try:
+                    filename = await save_first_cover(
+                        http, steam, steam_cover_candidates(game.steam_appid), covers_dir, game.id
+                    )
+                except ImageError:
+                    continue
+                game.cover_path = filename
+                db.commit()
+
+    @app.post("/api/import/steam", response_model=SteamImportOut)
+    async def import_steam(background: BackgroundTasks, db: Session = Depends(get_db)):
+        if not steam.can_import:
+            raise HTTPException(400, "Set STEAM_API_KEY and STEAM_ID to import your Steam library")
+        try:
+            owned = await steam.owned_games()
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, f"Steam API error: {exc}")
+        pc = db.scalar(select(Platform).where(Platform.name == "PC"))
+        existing = set(db.scalars(select(Game.steam_appid).where(Game.steam_appid.is_not(None))))
+        new_games = [
+            Game(
+                title=item.get("name") or f"Steam app {item['appid']}",
+                platform_id=pc.id,
+                format=GameFormat.digital,
+                store="Steam",
+                steam_appid=item["appid"],
+            )
+            for item in owned
+            if item["appid"] not in existing
+        ]
+        db.add_all(new_games)
+        db.commit()
+        background.add_task(download_steam_covers, [g.id for g in new_games])
+        return SteamImportOut(imported=len(new_games), skipped=len(owned) - len(new_games))
 
     @app.get("/api/stats")
     def stats(db: Session = Depends(get_db)):

@@ -32,3 +32,14 @@ form label { display: flex; flex-direction: column; gap: .2rem; margin-bottom: .
 form .row { display: flex; gap: .6rem; flex-wrap: wrap; }
 menu { display: flex; gap: .5rem; padding: 0; margin: 1rem 0 0; }
 .spacer { flex: 1; }
+.title-row { align-items: flex-end; }
+.title-row button { margin-bottom: .6rem; }
+#lookup { border: 1px solid var(--border); border-radius: 8px; padding: .5rem; margin-bottom: .6rem; max-height: 320px; overflow-y: auto; }
+#lookup-status { font-size: .8rem; color: var(--muted); margin-bottom: .4rem; }
+.result { display: flex; gap: .6rem; align-items: center; padding: .35rem; border-radius: 6px; cursor: pointer; }
+.result:hover { background: var(--bg); }
+.result img, .result .noimg { width: 45px; height: 60px; object-fit: cover; border-radius: 4px; background: var(--border); flex-shrink: 0; }
+.result .r-title { font-weight: 600; }
+.result .r-meta { font-size: .78rem; color: var(--muted); }
+#cover-preview { display: flex; gap: .6rem; align-items: center; margin-bottom: .6rem; font-size: .8rem; color: var(--muted); }
+#cover-preview img { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; }
