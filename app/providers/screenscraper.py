@@ -27,6 +27,12 @@ def _pick(entries: list[dict], key: str = "region") -> str | None:
     return entries[0].get("text")
 
 
+def _pick_lang(entries: list[dict]) -> str | None:
+    """Pick the Spanish text, else English, else the first one."""
+    by_lang = {e.get("langue"): e.get("text") for e in entries}
+    return by_lang.get("es") or by_lang.get("en") or (entries[0].get("text") if entries else None)
+
+
 class ScreenScraperProvider(MetadataProvider):
     """ScreenScraper (https://www.screenscraper.fr). Needs developer credentials + a user account."""
 
@@ -73,6 +79,7 @@ class ScreenScraperProvider(MetadataProvider):
             boxes.sort(key=lambda m: REGION_PRIORITY.index(m["region"]) if m.get("region") in REGION_PRIORITY else 99)
             synopsis = {s.get("langue"): s.get("text") for s in game.get("synopsis", [])}
             system = (game.get("systeme") or {}).get("text")
+            genres = [_pick_lang(g.get("noms", [])) for g in game.get("genres", [])]
             results.append(SearchResult(
                 provider=self.name,
                 external_id=str(game["id"]),
@@ -80,6 +87,9 @@ class ScreenScraperProvider(MetadataProvider):
                 release_year=year_from(_pick(game.get("dates", []))),
                 platforms=[system] if system else [],
                 summary=synopsis.get("es") or synopsis.get("en"),
+                publisher=(game.get("editeur") or {}).get("text"),
+                developer=(game.get("developpeur") or {}).get("text"),
+                genre=", ".join(g for g in genres if g) or None,
                 cover_urls=[m["url"] for m in boxes],
                 thumb_url=boxes[0]["url"] if boxes else None,
             ))

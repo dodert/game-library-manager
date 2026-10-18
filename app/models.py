@@ -86,6 +86,8 @@ class Game(Base):
     # Last online lookup (bulk "Buscar carátulas"); NULL = never looked up
     scraped_at: Mapped[datetime | None] = mapped_column(DateTime)
     scrape_error: Mapped[str | None] = mapped_column(String(300))
+    # Looked up online instead of the title when set (e.g. "Zelda Tears of the Kingdom" for a special edition)
+    search_title: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

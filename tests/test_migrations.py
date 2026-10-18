@@ -35,7 +35,7 @@ def test_legacy_v01_database_is_upgraded(tmp_path):
     assert {"summary", "steam_appid", "loaned_to", "loaned_at"} <= columns
     with engine.connect() as conn:
         assert conn.execute(text("SELECT title FROM games")).scalar() == "Doom"
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"
 
 
 def test_upgrade_is_idempotent(tmp_path):

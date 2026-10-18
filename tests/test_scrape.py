@@ -20,7 +20,9 @@ def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json=[
                 {"id": 2, "name": "Hades II", "cover": {"image_id": "other"}},
                 {"id": 1, "name": "Hades", "first_release_date": 1600300800, "summary": "Roguelike",
-                 "cover": {"image_id": "co39vc"}, "platforms": [{"name": "PC (Microsoft Windows)"}]},
+                 "cover": {"image_id": "co39vc"}, "platforms": [{"name": "PC (Microsoft Windows)"}],
+                 "genres": [{"name": "Role-playing (RPG)"}, {"name": "Indie"}], "collection": {"name": "Hades"},
+                 "involved_companies": [{"company": {"name": "Supergiant Games"}, "developer": True, "publisher": True}]},
             ])
         return httpx.Response(200, json=[{"id": 9, "name": "Something Else Entirely"}])
     if host == "store.steampowered.com":
@@ -31,8 +33,8 @@ def handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(500, text=f"unexpected {request.url}")
 
 
-def run(client, mode):
-    assert client.post("/api/scrape", json={"mode": mode}).status_code == 202
+def run(client, mode, **options):
+    assert client.post("/api/scrape", json={"mode": mode, **options}).status_code == 202
     for _ in range(200):
         status = client.get("/api/scrape").json()
         if not status["running"]:
@@ -79,3 +81,48 @@ def test_rank_results_prefers_exact_title_and_platform():
     ranked = rank_results("Super Mario Odyssey", "Nintendo Switch", results)
     assert [r.external_id for r in ranked] == ["2", "1"]
     assert rank_results("Figura Amiibo Link The Legend of Zelda", "Sin plataforma", results) == []
+
+
+def make_client(tmp_path):
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    app = create_app(Settings(data_dir=tmp_path, igdb_client_id="cid", igdb_client_secret="x", scrape_delay=0), http_client=http)
+    return TestClient(app)
+
+
+def test_scrape_details_only_fills_empty_fields(tmp_path):
+    with make_client(tmp_path) as client:
+        pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+        hades = client.post("/api/games", json={"title": "Hades", "platform_id": pc, "format": "digital",
+                                                "genre": "Mi género"}).json()
+        status = run(client, "missing", providers=["igdb"], covers=False, details=True)
+        assert (status["covers"], status["details"], status["sources"]) == (0, 1, ["IGDB"])
+        game = client.get(f"/api/games/{hades['id']}").json()
+        assert game["cover_url"] is None
+        assert (game["summary"], game["release_year"], game["publisher"], game["developer"], game["series"]) == (
+            "Roguelike", 2020, "Supergiant Games", "Supergiant Games", "Hades")
+        assert game["genre"] == "Mi género"  # already set, left alone
+
+
+def test_scrape_only_uses_selected_providers(tmp_path):
+    with make_client(tmp_path) as client:
+        pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+        client.post("/api/games", json={"title": "Hades", "platform_id": pc, "format": "digital"})
+        # Steam alone finds nothing for Hades in the mock; IGDB is not asked
+        status = run(client, "missing", providers=["steam"])
+        assert (status["found"], status["not_found"], status["sources"]) == (0, 1, ["Steam"])
+
+        assert client.post("/api/scrape", json={"mode": "all", "providers": ["steamgriddb"]}).status_code == 400
+        assert client.post("/api/scrape", json={"mode": "all", "covers": False, "details": False}).status_code == 422
+
+
+def test_scrape_searches_by_search_title_when_set(tmp_path):
+    with make_client(tmp_path) as client:
+        pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+        game = client.post("/api/games", json={"title": "Hades Edición Coleccionista", "platform_id": pc,
+                                               "format": "physical", "search_title": "Hades"}).json()
+        status = run(client, "missing", providers=["igdb"])
+        assert (status["found"], status["covers"]) == (1, 1)
+        assert client.get(f"/api/games/{game['id']}").json()["summary"] == "Roguelike"
+        # Clearing it goes back to searching by title, which finds nothing here
+        client.patch(f"/api/games/{game['id']}", json={"search_title": None})
+        assert run(client, "all", providers=["igdb"], covers=False)["not_found"] == 1

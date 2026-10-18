@@ -51,6 +51,10 @@ def handler(request: httpx.Request) -> httpx.Response:
             "systeme": {"id": "225", "text": "Switch"},
             "dates": [{"region": "eu", "text": "2020-09-17"}],
             "synopsis": [{"langue": "en", "text": "EN"}, {"langue": "es", "text": "ES"}],
+            "editeur": {"id": "1", "text": "Supergiant Games"},
+            "developpeur": {"id": "1", "text": "Supergiant Games"},
+            "genres": [{"id": "1", "noms": [{"langue": "en", "text": "Action"}, {"langue": "es", "text": "Acción"}]},
+                       {"id": "2", "noms": [{"langue": "en", "text": "Roguelike"}]}],
             "medias": [
                 {"type": "box-2D", "region": "us", "url": "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=dev&devpassword=secret&jeuid=300&media=box-2D(us)"},
                 {"type": "box-2D", "region": "eu", "url": "https://neoclone.screenscraper.fr/api2/mediaJeu.php?devid=dev&devpassword=secret&jeuid=300&media=box-2D(eu)"},
@@ -109,6 +113,7 @@ def test_search_all_providers(client):
 
     ss = by_provider["screenscraper"]
     assert ss["title"] == "Hades" and ss["summary"] == "ES" and ss["release_year"] == 2020
+    assert (ss["publisher"], ss["developer"], ss["genre"]) == ("Supergiant Games", "Supergiant Games", "Acción, Roguelike")
     assert "media=box-2D%28eu%29" in ss["cover_urls"][0]
     assert all("secret" not in u for u in ss["cover_urls"] + [ss["thumb_url"]])
 

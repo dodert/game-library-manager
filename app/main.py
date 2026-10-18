@@ -240,8 +240,8 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             for p in providers.values()
         ]
 
-    async def search_providers(q: str, provider: str | None = None):
-        selected = [get_provider(provider)] if provider else [p for p in providers.values() if p.enabled]
+    async def search_providers(q: str, names: list[str]):
+        selected = [get_provider(n) for n in names] if names else [p for p in providers.values() if p.enabled]
         outcomes = await asyncio.gather(*(p.search(q) for p in selected), return_exceptions=True)
         results, errors = [], {}
         for p, outcome in zip(selected, outcomes):
@@ -252,14 +252,14 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         return results, errors
 
     @app.get("/api/metadata/search", response_model=MetadataSearchOut)
-    async def metadata_search(q: str = Query(min_length=1), provider: str | None = None):
+    async def metadata_search(q: str = Query(min_length=1), provider: list[str] = Query(default=[])):
         results, errors = await search_providers(q, provider)
         return MetadataSearchOut(results=[r.__dict__ for r in results], errors=errors)
 
     @app.get("/api/covers/search", response_model=CoverSearchOut)
-    async def cover_search(q: str = Query(min_length=1), platform: str = ""):
+    async def cover_search(q: str = Query(min_length=1), platform: str = "", provider: list[str] = Query(default=[])):
         """All covers the providers have for a title, to pick one by hand (closest title matches first)."""
-        results, errors = await search_providers(q)
+        results, errors = await search_providers(q, provider)
         return CoverSearchOut(options=cover_options(q, platform, results, providers), errors=errors)
 
     @app.get("/api/metadata/image")
@@ -297,9 +297,11 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     @app.post("/api/scrape", response_model=ScrapeStatusOut, status_code=202)
     async def start_scrape(data: ScrapeIn, db: Session = Depends(get_db)):
         try:
-            scraper.start(data.mode)
+            scraper.start(data.mode, data.providers, covers=data.covers, details=data.details)
         except RuntimeError as exc:
             raise HTTPException(409, str(exc))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
         return scrape_status(db)
 
     @app.post("/api/scrape/cancel", response_model=ScrapeStatusOut)

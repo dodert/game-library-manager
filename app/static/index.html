@@ -57,10 +57,23 @@
   <dialog id="scrape-dlg">
     <form method="dialog" id="scrape-form">
       <h2>Buscar carátulas y datos</h2>
-      <p class="hint" id="scrape-providers"></p>
-      <label class="radio"><input type="radio" name="mode" value="missing" checked> <span id="scrape-missing-label">Solo los que nunca se han buscado</span></label>
-      <label class="radio"><input type="radio" name="mode" value="all"> <span id="scrape-all-label">Todos</span></label>
-      <p class="hint">Con «Todos» se reemplazan las carátulas que ya tengas. La descripción y el año solo se rellenan si están vacíos.</p>
+      <fieldset>
+        <legend>Fuentes</legend>
+        <div id="scrape-providers"></div>
+        <p class="hint" id="scrape-providers-hint" hidden>Añade claves de IGDB, SteamGridDB o ScreenScraper para tener más fuentes.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Qué buscar</legend>
+        <label class="radio"><input type="checkbox" name="covers" checked> Carátula</label>
+        <label class="radio"><input type="checkbox" name="details" checked> Datos del juego: descripción, año, editor, desarrollador, género y saga</label>
+        <p class="hint">Los datos solo rellenan los campos vacíos; lo que ya tengas no se cambia.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Juegos</legend>
+        <label class="radio"><input type="radio" name="mode" value="missing" checked> <span id="scrape-missing-label">Solo los que nunca se han buscado</span></label>
+        <label class="radio"><input type="radio" name="mode" value="all"> <span id="scrape-all-label">Todos</span></label>
+        <p class="hint">Con «Todos» se reemplazan las carátulas que ya tengas (si buscas carátula).</p>
+      </fieldset>
       <menu>
         <span class="spacer"></span>
         <button type="button" id="scrape-dlg-cancel">Cancelar</button>
@@ -111,6 +124,13 @@
       <div class="row title-row">
         <label>Título <input name="title" maxlength="300" required></label>
         <button type="button" id="lookup-btn">Buscar en internet</button>
+      </div>
+      <label class="search-title">Buscar como <input name="search_title" maxlength="300" placeholder="Vacío = se busca por el título"></label>
+      <div id="lookup-opts" class="lookup-opts">
+        <span class="opts-label">Fuentes:</span><span id="lookup-providers"></span>
+        <span class="opts-label">Usar:</span>
+        <label class="radio"><input type="checkbox" id="use-cover" checked> Carátula</label>
+        <label class="radio"><input type="checkbox" id="use-details" checked> Datos</label>
       </div>
       <div id="lookup" hidden>
         <div id="lookup-status"></div>

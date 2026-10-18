@@ -41,3 +41,14 @@ def test_cover_search_lists_every_cover_matches_first(tmp_path):
     # Exact title matches come before "Hades II"
     assert [o["matches"] for o in opts] == [True, True, True, False]
     assert opts[-1]["title"] == "Hades II"
+
+
+def test_cover_search_only_asks_selected_providers(tmp_path):
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    app = create_app(Settings(data_dir=tmp_path, steamgriddb_api_key="k"), http_client=http)
+    with TestClient(app) as client:
+        res = client.get("/api/covers/search", params={"q": "Hades", "provider": "steamgriddb"}).json()
+        assert {o["provider"] for o in res["options"]} == {"steamgriddb"}
+        both = client.get("/api/metadata/search", params=[("q", "Hades"), ("provider", "steam"), ("provider", "steamgriddb")])
+        assert {r["provider"] for r in both.json()["results"]} == {"steam", "steamgriddb"}
+        assert client.get("/api/covers/search", params={"q": "Hades", "provider": "igdb"}).status_code == 404

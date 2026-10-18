@@ -22,6 +22,7 @@ EXPORT_FIELDS = [
     "notes", "summary", "steam_appid", "loan_due", "publisher", "developer", "genre", "series",
     "item_type", "serial_number", "completeness", "condition", "has_box", "has_manual", "quantity",
     "current_value", "owner", "location", "storage_device", "storage_slot", "rating", "tags", "completed_at",
+    "search_title",
 ]
 
 # CLZ exports leave Platform empty for hardware and accessories.
@@ -65,12 +66,13 @@ ALIASES = {
     "rating": ["rating", "my rating", "puntuacion", "valoracion"],
     "tags": ["tags", "etiquetas"],
     "completed_at": ["completed_at", "completed date", "fecha completado"],
+    "search_title": ["search_title", "search title", "texto de busqueda"],
 }
 
 TEXT_FIELDS = [
     "store", "edition", "region", "barcode", "notes", "summary", "loaned_to", "publisher", "developer",
     "genre", "series", "item_type", "serial_number", "completeness", "condition", "owner", "location",
-    "storage_device", "storage_slot", "tags",
+    "storage_device", "storage_slot", "tags", "search_title",
 ]
 DATE_FIELDS = ["purchase_date", "loaned_at", "loan_due", "completed_at"]
 PRICE_FIELDS = ["purchase_price", "current_value"]

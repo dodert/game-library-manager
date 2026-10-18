@@ -32,17 +32,56 @@ async function loadProviders() {
 const proxied = (provider, url) =>
   url ? `/api/metadata/image?provider=${encodeURIComponent(provider)}&url=${encodeURIComponent(url)}` : null;
 
+// Sources and "cover / data" choices, shared by the bulk lookup and the game dialog.
+// Unticked sources are remembered (not ticked ones), so a newly configured source starts ticked.
+function loadSourcePrefs() {
+  try { return JSON.parse(localStorage.getItem("glm-scrape-prefs") || "{}"); } catch { return {}; }
+}
+
+function saveSourcePrefs(selected, covers, details) {
+  const excluded = providers.filter((p) => p.enabled && !selected.includes(p.name)).map((p) => p.name);
+  try { localStorage.setItem("glm-scrape-prefs", JSON.stringify({ excluded, covers, details })); } catch {}
+}
+
+const providerChecks = (name, prefs) => providers.filter((p) => p.enabled).map((p) =>
+  `<label class="radio"><input type="checkbox" name="${name}" value="${esc(p.name)}"${(prefs.excluded ?? []).includes(p.name) ? "" : " checked"}> ${esc(p.label)}</label>`,
+).join("");
+
+function renderLookupOpts() {
+  const prefs = loadSourcePrefs();
+  $("#lookup-providers").innerHTML = providerChecks("lookup-provider", prefs);
+  $("#use-cover").checked = prefs.covers ?? true;
+  $("#use-details").checked = prefs.details ?? true;
+}
+
+const lookupProviders = () => [...document.querySelectorAll("#lookup-providers input:checked")].map((el) => el.value);
+
+function providerQuery() {
+  const selected = lookupProviders();
+  if (!selected.length) throw new Error("Elige al menos una fuente");
+  return selected.map((name) => `&provider=${encodeURIComponent(name)}`).join("");
+}
+
+$("#lookup-opts").addEventListener("change", () =>
+  saveSourcePrefs(lookupProviders(), $("#use-cover").checked, $("#use-details").checked));
+
+// What the online searches look for: the "Buscar como" text when filled, else the title
+function searchText() {
+  const f = $("#game-form").elements;
+  return f.search_title.value.trim() || f.title.value.trim();
+}
+
 async function lookup() {
-  const title = $("#game-form").elements.title.value.trim();
+  const title = searchText();
   if (!title) return;
   $("#lookup").hidden = false;
   $("#lookup-results").innerHTML = "";
   $("#lookup-status").textContent = "Buscando…";
   try {
-    const { results, errors } = await api(`/api/metadata/search?q=${encodeURIComponent(title)}`);
+    const { results, errors } = await api(`/api/metadata/search?q=${encodeURIComponent(title)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
-    const active = providers.filter((p) => p.enabled).map((p) => p.label).join(", ");
+    const active = lookupProviders().map(label).join(", ");
     $("#lookup-status").textContent =
       `${results.length} resultados (${active})` + (failed.length ? ` · Error en ${failed.join(" · ")}` : "");
     $("#lookup-results").innerHTML = results.map((r, i) => {
@@ -66,11 +105,13 @@ async function lookup() {
 
 function applyResult(r) {
   const f = $("#game-form").elements;
-  f.title.value = r.title;
-  if (r.release_year) f.release_year.value = r.release_year;
-  if (r.summary) f.summary.value = r.summary;
+  if ($("#use-details").checked) {
+    // With a "Buscar como" text the title is deliberately different (an edition, a pack…): keep it
+    if (!f.search_title.value.trim()) f.title.value = r.title;
+    for (const key of ["release_year", "summary", "publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
+  }
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
-  if (r.cover_urls.length) {
+  if ($("#use-cover").checked && r.cover_urls.length) {
     pendingCover = { provider: r.provider, urls: r.cover_urls };
     showCover(proxied(r.provider, r.thumb_url || r.cover_urls[0]), proxied(r.provider, r.cover_urls[0]));
     $("#cover-preview span").textContent = "Esta carátula se descargará al guardar";
@@ -86,14 +127,14 @@ function showCover(src, full = src) {
 
 async function searchCovers() {
   const form = $("#game-form");
-  const title = form.elements.title.value.trim();
+  const title = searchText();
   if (!title) return alert("Escribe primero el título");
   const platform = form.elements.platform_id.selectedOptions[0]?.textContent ?? "";
   $("#cover-picker").hidden = false;
   $("#cover-picker-grid").innerHTML = "";
   $("#cover-picker-status").textContent = "Buscando carátulas…";
   try {
-    const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}`);
+    const { options, errors } = await api(`/api/covers/search?q=${encodeURIComponent(title)}&platform=${encodeURIComponent(platform)}${providerQuery()}`);
     const label = (name) => providers.find((p) => p.name === name)?.label ?? name;
     const failed = Object.entries(errors).map(([name, msg]) => `${label(name)}: ${msg}`);
     const matching = options.filter((o) => o.matches).length;
@@ -328,6 +369,7 @@ function openDialog(game) {
   const form = $("#game-form");
   form.reset();
   pendingCover = null;
+  renderLookupOpts();
   $("#lookup").hidden = true;
   $("#cover-preview").hidden = !game?.cover_url;
   $("#cover-picker").hidden = true;
@@ -486,10 +528,12 @@ function renderScrape(st) {
   const progress = bar.querySelector("progress");
   progress.max = st.total || 1;
   progress.value = st.done;
-  const counts = `${st.covers} carátulas nuevas · ${st.found} encontrados · ${st.not_found} sin resultados` +
+  const counts = (st.want_covers ? `${st.covers} carátulas nuevas · ` : "") +
+    (st.want_details ? `${st.details} con datos nuevos · ` : "") +
+    `${st.found} encontrados · ${st.not_found} sin resultados` +
     (st.failed ? ` · ${st.failed} con error` : "");
   bar.querySelector(".scrape-text").textContent = st.running
-    ? `Buscando ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    ? `Buscando en ${st.sources.join(", ")} ${st.done}/${st.total}${st.current ? ` · ${st.current}` : ""} · ${counts}`
     : `${st.cancelled ? "Búsqueda cancelada" : "Búsqueda terminada"}: ${st.done}/${st.total} · ${counts}` +
       (st.errors.length ? ` · Errores: ${st.errors.slice(0, 3).join(" | ")}` : "");
   $("#scrape-cancel").hidden = !st.running;
@@ -512,8 +556,13 @@ async function pollScrape() {
 async function openScrapeDialog() {
   const st = await api("/api/scrape");
   if (st.running) { renderScrape(st); return; }
-  $("#scrape-providers").textContent = `Fuentes activas: ${st.providers.join(", ") || "ninguna"}.` +
-    (st.providers.length <= 1 ? " Añade claves de IGDB, SteamGridDB o ScreenScraper para mejores resultados." : "");
+  const enabled = providers.filter((p) => p.enabled);
+  const saved = loadSourcePrefs();
+  $("#scrape-providers").innerHTML = providerChecks("provider", saved) || "Ninguna fuente activa.";
+  $("#scrape-providers-hint").hidden = enabled.length > 1;
+  const form = $("#scrape-form").elements;
+  if (saved.covers !== undefined) form.covers.checked = saved.covers;
+  if (saved.details !== undefined) form.details.checked = saved.details;
   $("#scrape-missing-label").textContent = `Solo los que nunca se han buscado (${st.never_scraped})`;
   $("#scrape-all-label").textContent = `Todos (${st.library_total})`;
   $("#scrape-dlg").showModal();
@@ -521,11 +570,20 @@ async function openScrapeDialog() {
 
 $("#scrape-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const mode = new FormData(ev.target).get("mode");
+  const data = new FormData(ev.target);
+  const body = {
+    mode: data.get("mode"),
+    providers: data.getAll("provider"),
+    covers: ev.target.elements.covers.checked,
+    details: ev.target.elements.details.checked,
+  };
+  if (!body.providers.length) return alert("Elige al menos una fuente");
+  if (!body.covers && !body.details) return alert("Elige carátula, datos o ambos");
+  saveSourcePrefs(body.providers, body.covers, body.details);
   $("#scrape-dlg").close();
   try {
     renderScrape(await api("/api/scrape", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     }));
     if (!scrapePoll) pollScrape();
   } catch (err) {

@@ -39,6 +39,7 @@ class GameBase(BaseModel):
     developer: str | None = Field(default=None, max_length=150)
     genre: str | None = Field(default=None, max_length=150)
     series: str | None = Field(default=None, max_length=150)
+    search_title: str | None = Field(default=None, max_length=300)
     item_type: str | None = Field(default=None, max_length=50)
     serial_number: str | None = Field(default=None, max_length=100)
     completeness: str | None = Field(default=None, max_length=30)
@@ -83,6 +84,7 @@ class GameUpdate(BaseModel):
     developer: str | None = Field(default=None, max_length=150)
     genre: str | None = Field(default=None, max_length=150)
     series: str | None = Field(default=None, max_length=150)
+    search_title: str | None = Field(default=None, max_length=300)
     item_type: str | None = Field(default=None, max_length=50)
     serial_number: str | None = Field(default=None, max_length=100)
     completeness: str | None = Field(default=None, max_length=30)
@@ -137,6 +139,10 @@ class MetadataResult(BaseModel):
     release_year: int | None = None
     platforms: list[str] = []
     summary: str | None = None
+    publisher: str | None = None
+    developer: str | None = None
+    genre: str | None = None
+    series: str | None = None
     cover_urls: list[str] = []
     thumb_url: str | None = None
     cover_thumbs: list[str] = []
@@ -186,6 +192,16 @@ class CsvImportOut(BaseModel):
 
 class ScrapeIn(BaseModel):
     mode: Literal["missing", "all"] = "missing"
+    # Provider names to use; empty means every enabled provider
+    providers: list[str] = []
+    covers: bool = True
+    details: bool = True
+
+    @model_validator(mode="after")
+    def something_to_do(self):
+        if not (self.covers or self.details):
+            raise ValueError("Choose covers, details or both")
+        return self
 
 
 class ScrapeStatusOut(BaseModel):
@@ -195,8 +211,12 @@ class ScrapeStatusOut(BaseModel):
     done: int
     found: int
     covers: int
+    details: int
     not_found: int
     failed: int
+    sources: list[str]
+    want_covers: bool
+    want_details: bool
     current: str | None
     started_at: str | None
     finished_at: str | None
