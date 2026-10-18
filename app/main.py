@@ -44,7 +44,11 @@ SORT_FIELDS = {
     "store": Game.store,
     "purchase_price": Game.purchase_price,
     "rating": Game.rating,
+    "item_type": Game.item_type,
 }
+
+# Anything with a hardware type (Console, Amiibo, Funda...) is hardware; the rest are games
+IS_HARDWARE = func.coalesce(func.trim(Game.item_type), "") != ""
 SORT_PATTERN = f"^-?({'|'.join(SORT_FIELDS)})$"
 
 
@@ -145,6 +149,8 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         platform_id: int | None = None,
         format: GameFormat | None = None,
         status: list[GameStatus] = Query(default=[]),
+        kind: Literal["game", "hardware"] | None = None,
+        item_type: str | None = None,
         sort: str = Query("title", pattern=SORT_PATTERN),
         limit: int = Query(100, ge=1, le=500),
         offset: int = Query(0, ge=0),
@@ -163,6 +169,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             stmt = stmt.where(Game.format == format)
         if status:
             stmt = stmt.where(Game.status.in_(status))
+        if kind:
+            stmt = stmt.where(IS_HARDWARE if kind == "hardware" else ~IS_HARDWARE)
+        if item_type:
+            stmt = stmt.where(func.lower(func.trim(Game.item_type)) == item_type.strip().lower())
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
         key = sort.lstrip("-")
         if key == "platform":
@@ -174,6 +184,13 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             stmt.options(selectinload(Game.platform)).order_by(order, Game.id).limit(limit).offset(offset)
         ).all()
         return GamePage(total=total, items=[to_out(g) for g in games])
+
+    @app.get("/api/item-types")
+    def list_item_types(db: Session = Depends(get_db)):
+        """Hardware types in use, for the filter."""
+        name = func.trim(Game.item_type)
+        rows = db.execute(select(name, func.count(Game.id)).where(IS_HARDWARE).group_by(name).order_by(name)).all()
+        return [{"name": n, "count": c} for n, c in rows]
 
     @app.post("/api/games", response_model=GameOut, status_code=201)
     def create_game(data: GameIn, db: Session = Depends(get_db)):
@@ -368,6 +385,14 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             "by_format": counts(Game.format, collection),
             "by_status": counts(Game.status),
             "by_completion": counts(Game.completion, collection),
+            "by_kind": {
+                "game": db.scalar(select(func.count(Game.id)).where(collection, ~IS_HARDWARE)),
+                "hardware": db.scalar(select(func.count(Game.id)).where(collection, IS_HARDWARE)),
+            },
+            "by_item_type": dict(db.execute(
+                select(func.trim(Game.item_type), func.count(Game.id)).where(collection, IS_HARDWARE)
+                .group_by(func.trim(Game.item_type)).order_by(func.count(Game.id).desc())
+            ).all()),
             "total_spent": round(db.scalar(select(func.coalesce(func.sum(Game.purchase_price), 0)).where(collection)) or 0, 2),
             "loaned": db.scalar(select(func.count(Game.id)).where(Game.status == GameStatus.lent)),
         }

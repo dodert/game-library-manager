@@ -15,6 +15,7 @@ Work in progress. Roadmap:
 
 - **Exportar CSV** downloads the whole library (`/api/export/csv`).
 - **Importar CSV** accepts that file back, or a CSV from another collection manager (for example a CLZ Games export). Pick the separator in the import dialog (semicolon for CLZ, comma or tab), or let it detect it from the header row; UTF-8 or Windows-1252. Multi-line quoted fields are supported. Headers are matched by name in English or Spanish (`Title`/`Título`, `Platform`/`Plataforma`, `Barcode`/`Código de barras`, `Purchase Price`/`Precio`, …); unknown platforms are created and unrecognised columns are listed after the import. Rows already in the library (same title, platform and format) are skipped. HTML in imported text (CLZ descriptions often carry `<p>`, `<br>`, `&amp;`…) is converted to plain text. A CLZ Games export maps all its collector columns (publisher, developer, genre, series, hardware type, completeness, box, manual, condition, rating, tags, location, storage, loans…); rows with no platform, such as hardware and accessories, go under *Sin plataforma*.
+- **Videojuegos y hardware**: an item with a hardware type (CLZ's *Hardware Type*: Console, Amiibo, Funda…) is hardware; anything else is a video game. The filter bar can show only video games or only hardware, and then one hardware type; in the game dialog, *Tipo* switches between *Videojuego* and *Hardware* (which asks for the hardware type). Statistics count both and break hardware down by type.
 
 ## Docker
 

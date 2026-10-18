@@ -51,7 +51,7 @@ ALIASES = {
     "developer": ["developer", "desarrollador", "desarrolladora"],
     "genre": ["genre", "genero"],
     "series": ["series", "serie", "saga"],
-    "item_type": ["item_type", "hardware type", "tipo de articulo"],
+    "item_type": ["item_type", "hardware type", "tipo de articulo", "tipo de hardware"],
     "serial_number": ["serial_number", "serial no.", "serial no", "serial number", "numero de serie"],
     "completeness": ["completeness", "completitud"],
     "condition": ["condition", "condicion", "estado fisico"],

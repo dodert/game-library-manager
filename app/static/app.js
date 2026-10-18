@@ -24,6 +24,19 @@ async function loadPlatforms() {
   $("#game-form [name=platform_id]").innerHTML = options;
 }
 
+// Hardware types in use, for the filter and the dialog suggestions
+async function loadItemTypes() {
+  const types = await api("/api/item-types");
+  const select = $("#f-item-type");
+  const current = select.value;
+  select.length = 1;
+  select.insertAdjacentHTML("beforeend", types.map((t) => `<option value="${esc(t.name)}">${esc(t.name)} (${t.count})</option>`).join(""));
+  select.value = [...select.options].some((o) => o.value === current) ? current : "";
+  const known = new Set([...$("#item-types").options].map((o) => o.value.toLowerCase()));
+  $("#item-types").insertAdjacentHTML("beforeend", types.filter((t) => !known.has(t.name.toLowerCase()))
+    .map((t) => `<option value="${esc(t.name)}">`).join(""));
+}
+
 async function loadProviders() {
   providers = await api("/api/providers");
   $("#steam-import-btn").hidden = !providers.some((p) => p.can_import);
@@ -180,7 +193,8 @@ function bars(title, data, labels = {}) {
 async function loadStats() {
   const s = await api("/api/stats");
   $("#stats").textContent =
-    `${s.collection} en colección · ${s.by_format.physical ?? 0} físicos · ${s.by_format.digital ?? 0} digitales`;
+    `${s.collection} en colección · ${s.by_kind.game} juegos · ${s.by_kind.hardware} hardware · ` +
+    `${s.by_format.physical ?? 0} físicos · ${s.by_format.digital ?? 0} digitales`;
   if (tab !== "stats") return;
   $("#stats-view").innerHTML = `
     <div class="tiles">
@@ -190,6 +204,8 @@ async function loadStats() {
       <div class="tile"><div class="tile-value">${money(s.total_spent)}</div><div class="tile-label">Gastado</div></div>
     </div>
     <div class="panels">
+      ${bars("Por tipo", s.by_kind, { game: "Videojuegos", hardware: "Hardware" })}
+      ${Object.keys(s.by_item_type).length ? bars("Hardware por tipo", s.by_item_type) : ""}
       ${bars("Por plataforma", s.by_platform)}
       ${bars("Por formato", s.by_format, FORMAT)}
       ${bars("Progreso", s.by_completion, COMPLETION)}
@@ -233,7 +249,7 @@ const cardHtml = (g) => `
 const COLUMNS = [
   ["title", "Título"], ["platform", "Plataforma"], ["release_year", "Año"], ["format", "Formato"],
   ["status", "Estado"], ["completion", "Progreso"], ["store", "Tienda"], ["purchase_date", "Fecha compra"],
-  ["purchase_price", "Precio"], ["rating", "Nota"],
+  ["purchase_price", "Precio"], ["rating", "Nota"], ["item_type", "Tipo"],
 ];
 
 function tableHead() {
@@ -263,7 +279,7 @@ function sortBy(key) {
 const rowHtml = (g) => `
     <tr data-id="${g.id}">
       <td class="c">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "<span>🎮</span>"}</td>
-      <td class="t">${esc(g.title)}${g.item_type ? ` <span class="badge">${esc(g.item_type)}</span>` : ""}</td>
+      <td class="t">${esc(g.title)}</td>
       <td>${esc(g.platform.name)}</td>
       <td class="num">${g.release_year ?? ""}</td>
       <td>${FORMAT[g.format]}</td>
@@ -273,6 +289,7 @@ const rowHtml = (g) => `
       <td class="num">${esc(g.purchase_date)}</td>
       <td class="num">${g.purchase_price != null ? money(g.purchase_price) : ""}</td>
       <td class="num">${g.rating != null ? `${g.rating}/10` : ""}</td>
+      <td>${g.item_type ? esc(g.item_type) : "Videojuego"}</td>
     </tr>`;
 
 // Where the next page of games is appended, and how each game is drawn, for the current view
@@ -296,6 +313,9 @@ function listParams() {
   for (const [key, el] of [["q", "#q"], ["platform_id", "#f-platform"], ["format", "#f-format"], ["sort", "#sort"]]) {
     if ($(el).value) params.set(key, $(el).value);
   }
+  const kind = $("#f-kind").value;
+  if (kind) params.set("kind", kind);
+  if (kind === "hardware" && $("#f-item-type").value) params.set("item_type", $("#f-item-type").value);
   for (const status of TAB_STATUS[tab] ?? []) params.append("status", status);
   return params;
 }
@@ -358,11 +378,18 @@ new IntersectionObserver((entries) => {
   if (entries.some((e) => e.isIntersecting) && tab !== "stats") loadMore();
 }, { rootMargin: "400px" }).observe($("#pager"));
 
-const refresh = () => Promise.all([tab === "stats" ? null : loadGames(true), loadStats()]);
+const refresh = () => Promise.all([tab === "stats" ? null : loadGames(true), loadStats(), loadItemTypes()]);
 
 function setPane(name) {
   document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.pane === name));
   document.querySelectorAll("#game-form .pane").forEach((p) => { p.hidden = p.dataset.pane !== name; });
+}
+
+// Hardware needs its type; a game has none
+function showKind() {
+  const hardware = $("#kind").value === "hardware";
+  $("#item-type-label").hidden = !hardware;
+  $("#game-form").elements.item_type.required = hardware;
 }
 
 function openDialog(game) {
@@ -385,6 +412,8 @@ function openDialog(game) {
       if (el.name && !SKIP_FIELDS.has(el.name) && game[el.name] != null) el.value = String(game[el.name]);
     }
   }
+  $("#kind").value = game?.item_type ? "hardware" : "game";
+  showKind();
   setPane("general");
   $("#scrape-info").textContent = game?.scraped_at
     ? `Última búsqueda online: ${game.scraped_at.slice(0, 16).replace("T", " ")}${game.scrape_error ? ` · ${game.scrape_error}` : ""}`
@@ -407,6 +436,7 @@ $("#game-form").addEventListener("submit", async (ev) => {
   }
   for (const key of ["platform_id", "release_year", "steam_appid"]) if (data[key] != null) data[key] = Number(data[key]);
   if (data.loaned_to && data.status === "owned") data.status = "lent";
+  if ($("#kind").value === "game") data.item_type = null;
 
   const id = form.elements.id.value;
   try {
@@ -512,7 +542,12 @@ $("#grid").addEventListener("click", async (ev) => {
 
 let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadGames(), 250); });
-for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", () => loadGames());
+for (const sel of ["#f-platform", "#f-format", "#f-item-type", "#sort"]) $(sel).addEventListener("change", () => loadGames());
+$("#f-kind").addEventListener("change", () => {
+  $("#f-item-type").hidden = $("#f-kind").value !== "hardware";
+  loadGames();
+});
+$("#kind").addEventListener("change", showKind);
 $("#more-btn").addEventListener("click", loadMore);
 document.querySelectorAll(".views [data-view]").forEach((b) => {
   b.setAttribute("aria-pressed", String(b.dataset.view === view));
