@@ -1,0 +1,48 @@
+name: Sync Unraid template
+
+# Copies unraid/game-library-manager.xml to the public templates repo so Unraid's
+# "Template repositories" can pick it up (Unraid can't read this private repo).
+# Needs the secret TEMPLATES_TOKEN: a fine-grained token with "Contents: Read and write"
+# on the templates repo only.
+
+on:
+  push:
+    branches: [main]
+    paths: ["unraid/**"]
+  workflow_dispatch:
+
+env:
+  TEMPLATES_REPO: dodert/unraid-templates
+  TEMPLATES_BRANCH: main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Push template
+        env:
+          TOKEN: ${{ secrets.TEMPLATES_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Secret TEMPLATES_TOKEN is not set"
+            exit 1
+          fi
+          git clone "https://x-access-token:${TOKEN}@github.com/${TEMPLATES_REPO}.git" templates
+          cd templates
+          # Start from the remote branch if it exists (the repo may still be empty)
+          if git ls-remote --exit-code --heads origin "$TEMPLATES_BRANCH" >/dev/null; then
+            git checkout -B "$TEMPLATES_BRANCH" "origin/$TEMPLATES_BRANCH"
+          else
+            git checkout --orphan "$TEMPLATES_BRANCH"
+          fi
+          cp ../unraid/*.xml .
+          git add *.xml
+          if git diff --cached --quiet; then
+            echo "Template unchanged"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update game-library-manager template from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
+          git push origin "HEAD:${TEMPLATES_BRANCH}"
