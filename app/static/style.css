@@ -16,6 +16,7 @@ button.primary, #add-btn { background: var(--accent); color: #fff; border-color:
 button.danger { color: var(--danger); border-color: var(--danger); }
 .filters { display: flex; gap: .5rem; padding: 0 1rem 1rem; flex-wrap: wrap; }
 .filters input { flex: 1; min-width: 200px; }
+#pager { display: flex; justify-content: center; align-items: center; gap: 1rem; padding: 0 1rem 2rem; font-size: .85rem; color: var(--muted); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; padding: 0 1rem 2rem; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; }
 .card:hover { outline: 2px solid var(--accent); }

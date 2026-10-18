@@ -162,19 +162,15 @@ function setTab(name) {
   const isStats = name === "stats";
   $("#filters").hidden = isStats;
   $("#grid").hidden = isStats;
+  $("#pager").hidden = isStats;
   $("#stats-view").hidden = !isStats;
   if (isStats) { $("#empty").hidden = true; loadStats(); } else loadGames();
 }
 
-async function loadGames() {
-  const params = new URLSearchParams();
-  for (const [key, el] of [["q", "#q"], ["platform_id", "#f-platform"], ["format", "#f-format"], ["sort", "#sort"]]) {
-    if ($(el).value) params.set(key, $(el).value);
-  }
-  for (const status of TAB_STATUS[tab] ?? []) params.append("status", status);
-  const page = await api(`/api/games?${params}`);
-  $("#empty").hidden = page.total > 0;
-  $("#grid").innerHTML = page.items.map((g) => `
+const PAGE_SIZE = 60;
+const list = { loaded: 0, total: 0, gen: 0, loading: false };
+
+const cardHtml = (g) => `
     <article class="card" data-id="${g.id}">
       <div class="cover">${g.cover_url ? `<img src="${esc(g.cover_url)}" alt="" loading="lazy">` : "🎮"}</div>
       <div class="info">
@@ -183,10 +179,76 @@ async function loadGames() {
         <span class="badge">${FORMAT[g.format]}</span>${g.item_type ? `<span class="badge">${esc(g.item_type)}</span>` : ""}${g.status !== "owned" ? `<span class="badge">${STATUS[g.status]}</span>` : ""}
         ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
-    </article>`).join("");
+    </article>`;
+
+function listParams() {
+  const params = new URLSearchParams();
+  for (const [key, el] of [["q", "#q"], ["platform_id", "#f-platform"], ["format", "#f-format"], ["sort", "#sort"]]) {
+    if ($(el).value) params.set(key, $(el).value);
+  }
+  for (const status of TAB_STATUS[tab] ?? []) params.append("status", status);
+  return params;
 }
 
-const refresh = () => Promise.all([tab === "stats" ? null : loadGames(), loadStats()]);
+function renderPager() {
+  const pages = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
+  const page = Math.min(pages, Math.max(1, Math.ceil(list.loaded / PAGE_SIZE)));
+  const more = list.loaded < list.total;
+  $("#pager").hidden = list.total === 0 || tab === "stats";
+  $("#pager-info").textContent = `Mostrando ${list.loaded} de ${list.total} · página ${page} de ${pages}`;
+  $("#more-btn").hidden = !more;
+  $("#more-btn").disabled = list.loading;
+  $("#more-btn").textContent = list.loading ? "Cargando…" : "Cargar más";
+}
+
+// Fetches the next page and appends it. A filter change bumps list.gen, so a page that
+// arrives for an old filter is dropped instead of being mixed into the new list.
+async function loadMore() {
+  if (list.loading || (list.loaded && list.loaded >= list.total)) return;
+  const gen = list.gen;
+  list.loading = true;
+  renderPager();
+  try {
+    const params = listParams();
+    params.set("limit", PAGE_SIZE);
+    params.set("offset", list.loaded);
+    const page = await api(`/api/games?${params}`);
+    if (gen !== list.gen) return;
+    $("#grid").insertAdjacentHTML("beforeend", page.items.map(cardHtml).join(""));
+    list.loaded += page.items.length;
+    list.total = page.total;
+    $("#empty").hidden = page.total > 0;
+  } finally {
+    if (gen === list.gen) list.loading = false;
+    renderPager();
+  }
+  // Keep filling while the sentinel is still on screen (tall windows, small pages)
+  if (gen === list.gen && list.loaded < list.total && sentinelVisible()) loadMore();
+}
+
+const sentinelVisible = () => $("#pager").getBoundingClientRect().top < window.innerHeight + 400;
+
+// keep: reload as many games as were already shown (after an edit), instead of going back to page 1
+async function loadGames(keep = false) {
+  const target = keep ? list.loaded : 0;
+  list.gen += 1;
+  list.loaded = 0;
+  list.total = 0;
+  list.loading = false;
+  $("#grid").innerHTML = "";
+  await loadMore();
+  while (list.loaded < Math.min(target, list.total) && !list.loading) {
+    const before = list.loaded;
+    await loadMore();
+    if (list.loaded === before) break;
+  }
+}
+
+new IntersectionObserver((entries) => {
+  if (entries.some((e) => e.isIntersecting) && tab !== "stats") loadMore();
+}, { rootMargin: "400px" }).observe($("#pager"));
+
+const refresh = () => Promise.all([tab === "stats" ? null : loadGames(true), loadStats()]);
 
 function setPane(name) {
   document.querySelectorAll(".dlg-tabs [role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.pane === name));
@@ -336,8 +398,9 @@ $("#grid").addEventListener("click", async (ev) => {
 });
 
 let debounce;
-$("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadGames, 250); });
-for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", loadGames);
+$("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadGames(), 250); });
+for (const sel of ["#f-platform", "#f-format", "#sort"]) $(sel).addEventListener("change", () => loadGames());
+$("#more-btn").addEventListener("click", loadMore);
 
 let scrapePoll = null;
 
