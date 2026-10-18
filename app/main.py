@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -127,6 +128,15 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             "database": engine.dialect.name,
             "schema": db.scalar(text("SELECT version_num FROM alembic_version")),
         }
+
+    @app.get("/api/languages")
+    def list_languages():
+        """Interface languages: one JSON file per language in static/i18n, named by its code."""
+        languages = []
+        for path in sorted((STATIC_DIR / "i18n").glob("*.json")):
+            name = json.loads(path.read_text(encoding="utf-8")).get("_name", path.stem)
+            languages.append({"code": path.stem, "name": name})
+        return languages
 
     @app.get("/api/platforms", response_model=list[PlatformOut])
     def list_platforms(db: Session = Depends(get_db)):
