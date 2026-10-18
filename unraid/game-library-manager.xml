@@ -2,12 +2,12 @@
 <Container version="2">
   <Name>game-library-manager</Name>
   <Repository>ghcr.io/dodert/game-library-manager:latest</Repository>
-  <Registry>https://github.com/dodert/game-library-manager./pkgs/container/game-library-manager</Registry>
+  <Registry>https://github.com/dodert/game-library-manager/pkgs/container/game-library-manager</Registry>
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/dodert/game-library-manager./issues</Support>
-  <Project>https://github.com/dodert/game-library-manager.</Project>
+  <Support>https://github.com/dodert/game-library-manager/issues</Support>
+  <Project>https://github.com/dodert/game-library-manager</Project>
   <Overview>Self-hosted video game collection manager (physical and digital, every console and PC) with cover art and metadata from IGDB, SteamGridDB, Steam and ScreenScraper. SQLite by default, PostgreSQL optional.</Overview>
   <Category>MediaApp:Other Tools:</Category>
   <WebUI>http://[IP]:[PORT:8000]/</WebUI>
