@@ -72,7 +72,8 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         scraper.cancel()
         await http.aclose()
 
-    app = FastAPI(title="Game Library Manager", version=__version__, lifespan=lifespan)
+    version = settings.app_version if settings.app_version and settings.app_version != "dev" else __version__
+    app = FastAPI(title="Game Library Manager", version=version, lifespan=lifespan)
 
     def get_db():
         with SessionLocal() as db:
@@ -96,12 +97,12 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     @app.get("/api/health")
     def health():
-        return {"status": "ok", "version": __version__}
+        return {"status": "ok", "version": version}
 
     @app.get("/api/about")
     def about(db: Session = Depends(get_db)):
         return {
-            "version": __version__,
+            "version": version,
             "commit": settings.git_sha or None,
             "ref": settings.git_ref or None,
             "build_date": settings.build_date or None,
@@ -385,7 +386,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     # Version the asset URLs so browsers fetch the new JS/CSS after an image update
-    asset_version = f"{__version__}-{settings.git_sha[:7]}" if settings.git_sha else __version__
+    asset_version = f"{version}-{settings.git_sha[:7]}" if settings.git_sha else version
     index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
 
     @app.get("/", include_in_schema=False)

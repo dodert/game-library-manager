@@ -112,3 +112,10 @@ def test_reset_library(client, tmp_path):
     assert client.get("/api/games").json()["total"] == 0
     assert len(client.get("/api/platforms").json()) == seeded
     assert not any((tmp_path / "covers").iterdir())
+
+
+def test_image_version_overrides_package_version(tmp_path):
+    client = TestClient(create_app(Settings(data_dir=tmp_path, app_version="0.5.31")))
+    assert client.get("/api/about").json()["version"] == "0.5.31"
+    assert client.get("/api/health").json()["version"] == "0.5.31"
+    assert "/static/app.js?v=0.5.31" in client.get("/").text

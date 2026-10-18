@@ -39,12 +39,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # App version from app/__init__.py, used in the image tags
+      # Every build gets its own version: X.Y from app/__init__.py + the CI run number
+      # (e.g. 0.5.27), so a later main build never reuses a branch build's number
       - id: app
         run: |
-          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' app/__init__.py)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+          base=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' app/__init__.py)
+          minor=$(echo "$base" | cut -d. -f1,2)
+          echo "version=$minor.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "minor=$minor" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -67,7 +69,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.app.outputs.version }}
             GIT_SHA=${{ github.sha }}
             GIT_REF=${{ github.ref_name }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
