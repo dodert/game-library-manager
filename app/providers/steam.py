@@ -16,6 +16,7 @@ class SteamProvider(MetadataProvider):
     name = "steam"
     label = "Steam"
     image_hosts = ("steamstatic.com", "steampowered.com", "akamaihd.net")
+    cover_urls_are_fallbacks = True
 
     def __init__(self, http, api_key: str = "", steam_id: str = ""):
         super().__init__(http)

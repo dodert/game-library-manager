@@ -142,7 +142,14 @@
           <label>Año <input name="release_year" type="number" min="1950" max="2100"></label>
         </div>
         <label>Descripción <textarea name="summary" rows="3"></textarea></label>
-        <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+        <div class="row cover-row">
+          <label>Carátula <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
+          <button type="button" id="covers-btn">Buscar carátulas</button>
+        </div>
+        <div id="cover-picker" hidden>
+          <div id="cover-picker-status"></div>
+          <div id="cover-picker-grid"></div>
+        </div>
         <p class="hint" id="scrape-info"></p>
       </div>
 

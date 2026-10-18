@@ -14,6 +14,8 @@ class SearchResult:
     # Full-size cover candidates, best first; thumb is for the result list.
     cover_urls: list[str] = field(default_factory=list)
     thumb_url: str | None = None
+    # Optional small version of each cover_urls entry, same order
+    cover_thumbs: list[str] = field(default_factory=list)
 
 
 class MetadataProvider:
@@ -21,6 +23,8 @@ class MetadataProvider:
     label: str = ""
     # Hosts covers are downloaded from (suffix match), used to validate cover URLs.
     image_hosts: tuple[str, ...] = ()
+    # True when cover_urls are fallbacks for one image (try in order), not different covers to choose from
+    cover_urls_are_fallbacks: bool = False
 
     def __init__(self, http: httpx.AsyncClient):
         self.http = http

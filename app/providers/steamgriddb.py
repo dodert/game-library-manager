@@ -37,6 +37,7 @@ class SteamGridDBProvider(MetadataProvider):
                 release_year=year_from(game.get("release_date")),
                 cover_urls=[g["url"] for g in grids],
                 thumb_url=grids[0].get("thumb") if grids else None,
+                cover_thumbs=[g.get("thumb") or g["url"] for g in grids],
             ))
         return results
 
@@ -48,4 +49,4 @@ class SteamGridDBProvider(MetadataProvider):
         if res.status_code == 404:
             return []
         res.raise_for_status()
-        return res.json().get("data", [])[:5]
+        return res.json().get("data", [])[:10]

@@ -83,7 +83,7 @@ Each provider turns on when its variables are set. Steam store search works with
 | Steam (library import) | `STEAM_API_KEY`, `STEAM_ID` | Key: https://steamcommunity.com/dev/apikey · `STEAM_ID` is your 64-bit SteamID; your profile's game details must be public |
 | ScreenScraper | `SCREENSCRAPER_DEV_ID`, `SCREENSCRAPER_DEV_PASSWORD`, `SCREENSCRAPER_USER`, `SCREENSCRAPER_PASSWORD` | User account at https://www.screenscraper.fr ; developer credentials are requested on its forum |
 
-In the add/edit dialog, **Buscar en internet** searches every enabled provider and lets you pick metadata and a cover; the cover is downloaded and stored in `DATA_DIR/covers`. **Importar Steam** adds your owned Steam games and downloads their covers in the background.
+In the add/edit dialog, **Buscar en internet** searches every enabled provider and lets you pick metadata and a cover; the cover is downloaded and stored in `DATA_DIR/covers`. **Buscar carátulas** (General tab, next to the cover) shows every cover the providers have for the title, closest title matches first, so you can pick one when there is more than one; it is downloaded when you save. **Importar Steam** adds your owned Steam games and downloads their covers in the background.
 
 ## Tests
 
