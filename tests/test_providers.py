@@ -171,3 +171,31 @@ def test_steam_import(client):
 
 def test_steam_import_needs_credentials(tmp_path):
     assert make_client(tmp_path).post("/api/import/steam").status_code == 400
+
+
+def test_provider_connection_test(client):
+    res = client.post("/api/providers/igdb/test").json()
+    assert res["status"] == "ok" and res["results"] == 1 and res["ms"] >= 0
+    steam = client.post("/api/providers/steam/test").json()
+    assert steam["status"] == "ok" and steam["library_games"] == 2
+    assert client.post("/api/providers/nope/test").status_code == 404
+
+
+def test_provider_connection_test_unconfigured_and_errors(tmp_path):
+    bare = make_client(tmp_path / "bare")
+    assert bare.post("/api/providers/igdb/test").json()["status"] == "not_configured"
+    assert bare.post("/api/providers/steam/test").json()["library_games"] is None
+
+    def failing(request):
+        if request.url.host in ("www.steamgriddb.com", "api.steampowered.com"):
+            return httpx.Response(401, json={"message": "bad key"})
+        return handler(request)
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(failing))
+    client = TestClient(create_app(Settings(data_dir=tmp_path / "bad", **ALL_KEYS), http_client=http))
+    sgdb = client.post("/api/providers/steamgriddb/test").json()
+    assert sgdb == {"status": "error", "error": "HTTP 401", "results": None, "ms": sgdb["ms"], "library_games": None}
+    steam = client.post("/api/providers/steam/test").json()
+    # Store search works, the Web API key doesn't; the key never shows in the error
+    assert steam["status"] == "error" and steam["error"] == "HTTP 401" and steam["results"] == 1
+    assert "skey" not in str(steam)

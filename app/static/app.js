@@ -668,8 +668,52 @@ async function openSettings() {
   const languages = await api("/api/languages");
   $("#lang-select").innerHTML = languages.map((l) => `<option value="${esc(l.code)}">${esc(l.name)}</option>`).join("");
   $("#lang-select").value = i18n.lang;
+  renderProviderTests();
   $("#settings-dlg").showModal();
 }
+
+function renderProviderTests() {
+  $("#provider-tests").innerHTML = providers.map((p) => `
+    <li data-provider="${esc(p.name)}">
+      <span class="p-name">${esc(p.label)}</span>
+      <span class="p-result">${p.enabled ? "" : esc(t("settings.test_not_configured"))}</span>
+      <button type="button" class="p-test">${esc(t("settings.test"))}</button>
+    </li>`).join("");
+}
+
+async function testProvider(li) {
+  const result = li.querySelector(".p-result");
+  const button = li.querySelector(".p-test");
+  button.disabled = true;
+  result.className = "p-result";
+  result.textContent = t("settings.testing");
+  try {
+    const r = await api(`/api/providers/${encodeURIComponent(li.dataset.provider)}/test`, { method: "POST" });
+    if (r.status === "ok") {
+      let text = t("settings.test_ok", { results: r.results, ms: r.ms });
+      if (r.library_games !== null) text += " · " + t("settings.test_library", { n: r.library_games });
+      result.textContent = text;
+    } else if (r.status === "not_configured") {
+      result.textContent = t("settings.test_not_configured");
+    } else {
+      result.textContent = t("settings.test_error", { error: r.error });
+    }
+    if (r.status !== "not_configured") result.classList.add(r.status);
+  } catch (err) {
+    result.textContent = t("settings.test_error", { error: err.message });
+    result.classList.add("error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+$("#provider-tests").addEventListener("click", (ev) => {
+  const button = ev.target.closest(".p-test");
+  if (button) testProvider(button.closest("li"));
+});
+$("#provider-test-all").addEventListener("click", () => {
+  $("#provider-tests").querySelectorAll("li").forEach(testProvider);
+});
 
 $("#settings-btn").addEventListener("click", openSettings);
 $("#settings-cancel").addEventListener("click", () => $("#settings-dlg").close());

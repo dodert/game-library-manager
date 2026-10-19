@@ -39,6 +39,10 @@
       <h2 data-i18n="settings.title">Settings</h2>
       <label><span data-i18n="settings.language">Language</span> <select name="lang" id="lang-select"></select></label>
       <p class="hint" data-i18n="settings.language_hint">Saved in this browser.</p>
+      <h3 data-i18n="settings.providers">Scraping sources</h3>
+      <p class="hint" data-i18n="settings.providers_hint">Checks each source's keys and connection with a test search.</p>
+      <ul id="provider-tests"></ul>
+      <button type="button" id="provider-test-all" data-i18n="settings.test_all">Test all</button>
       <menu>
         <span class="spacer"></span>
         <button type="button" id="settings-cancel" data-i18n="common.cancel">Cancel</button>

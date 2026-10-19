@@ -87,6 +87,8 @@ DATA_DIR=./data uvicorn app.main:create_app --factory --reload
 
 Each provider turns on when its variables are set. Steam store search works without a key.
 
+To check the keys, open **⚙ Settings → Scraping sources** and click **Test** (or **Test all**). Each source runs a search for a well-known game and shows whether it works, the error it returned (for example `HTTP 401` for a wrong key) or that it isn't configured. For Steam it also checks the library import key and SteamID.
+
 | Provider | Variables | Where to get them |
 |---|---|---|
 | IGDB | `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` | Register an application at https://dev.twitch.tv/console (see https://api-docs.igdb.com/#account-creation) |
