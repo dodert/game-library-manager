@@ -7,7 +7,7 @@ from typing import Literal
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
@@ -455,6 +455,15 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     # Version the asset URLs so browsers fetch the new JS/CSS after an image update
     asset_version = f"{version}-{settings.git_sha[:7]}" if settings.git_sha else version
     index_html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
+
+    # Browsers and bookmark tools ask for these at the root, whatever the page links
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return FileResponse(STATIC_DIR / "icons" / "favicon.ico", media_type="image/x-icon")
+
+    @app.get("/apple-touch-icon.png", include_in_schema=False)
+    def apple_touch_icon():
+        return FileResponse(STATIC_DIR / "icons" / "apple-touch-icon.png", media_type="image/png")
 
     @app.get("/", include_in_schema=False)
     def index():

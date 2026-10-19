@@ -136,3 +136,13 @@ def test_sort_by_table_columns(client):
     assert order("-purchase_price") == ["A", "B", "C"]
     assert order("-rating") == ["C", "A", "B"]
     assert client.get("/api/games", params={"sort": "nope"}).status_code == 422
+
+
+def test_favicon_and_touch_icon(client):
+    res = client.get("/favicon.ico")
+    assert res.status_code == 200 and res.headers["content-type"] == "image/x-icon"
+    assert res.content[:4] == b"\x00\x00\x01\x00"  # ICO header
+    assert client.get("/apple-touch-icon.png").content[:8] == b"\x89PNG\r\n\x1a\n"
+    html = client.get("/").text
+    assert 'rel="icon"' in html and 'rel="apple-touch-icon"' in html and 'rel="manifest"' in html
+    assert client.get("/static/icons/manifest.webmanifest").json()["icons"]
