@@ -26,8 +26,8 @@
   <Config Name="SteamGridDB API key" Target="STEAMGRIDDB_API_KEY" Default="" Mode="" Description="From https://www.steamgriddb.com/profile/preferences/api" Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Steam API key" Target="STEAM_API_KEY" Default="" Mode="" Description="From https://steamcommunity.com/dev/apikey (library import)" Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Steam ID" Target="STEAM_ID" Default="" Mode="" Description="Your SteamID64 (library import)" Type="Variable" Display="always" Required="false" Mask="false"/>
-  <Config Name="ScreenScraper dev id" Target="SCREENSCRAPER_DEV_ID" Default="" Mode="" Description="ScreenScraper developer credentials" Type="Variable" Display="advanced" Required="false" Mask="false"/>
-  <Config Name="ScreenScraper dev password" Target="SCREENSCRAPER_DEV_PASSWORD" Default="" Mode="" Description="ScreenScraper developer credentials" Type="Variable" Display="advanced" Required="false" Mask="true"/>
-  <Config Name="ScreenScraper user" Target="SCREENSCRAPER_USER" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="advanced" Required="false" Mask="false"/>
-  <Config Name="ScreenScraper password" Target="SCREENSCRAPER_PASSWORD" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="ScreenScraper dev id" Target="SCREENSCRAPER_DEV_ID" Default="" Mode="" Description="ScreenScraper developer credentials" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="ScreenScraper dev password" Target="SCREENSCRAPER_DEV_PASSWORD" Default="" Mode="" Description="ScreenScraper developer credentials" Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="ScreenScraper user" Target="SCREENSCRAPER_USER" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="ScreenScraper password" Target="SCREENSCRAPER_PASSWORD" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="always" Required="false" Mask="true"/>
 </Container>
