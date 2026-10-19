@@ -39,6 +39,8 @@ def test_round_trip_own_export(client, tmp_path):
 
     # Importing the same file again skips duplicates
     assert upload(other, csv_text).json()["skipped"] == 2
+    # ...unless asked not to
+    assert upload(other, csv_text, skip_duplicates="false").json()["imported"] == 2
 
 
 def test_foreign_headers_semicolons_and_new_platform(client):
