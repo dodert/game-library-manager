@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,7 +25,7 @@ from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider,
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
-    ProviderOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
+    ProviderOut, ProviderTestOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
 from .scraper import Scraper, cover_options
 from .seed import DEFAULT_PLATFORMS, seed_platforms
@@ -33,6 +34,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 ALLOWED_COVER_TYPES = IMAGE_TYPES
 USER_AGENT = f"game-library-manager/{__version__}"
 MAX_CSV_BYTES = 20 * 1024 * 1024
+# Well-known game every provider has, searched by the provider connection test
+PROVIDER_TEST_QUERY = "Hades"
 SORT_FIELDS = {
     "title": Game.title,
     "created_at": Game.created_at,
@@ -266,6 +269,28 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             ProviderOut(name=p.name, label=p.label, enabled=p.enabled, can_import=p is steam and steam.can_import)
             for p in providers.values()
         ]
+
+    @app.post("/api/providers/{name}/test", response_model=ProviderTestOut)
+    async def test_provider(name: str):
+        """Check a provider's credentials and connection with a real search for a well-known game."""
+        provider = providers.get(name)
+        if not provider:
+            raise HTTPException(404, f"Provider '{name}' not found")
+        if not provider.enabled:
+            return ProviderTestOut(status="not_configured")
+        started = time.monotonic()
+        try:
+            results = await provider.search(PROVIDER_TEST_QUERY, limit=5)
+        except Exception as exc:
+            return ProviderTestOut(status="error", error=error_message(exc), ms=round((time.monotonic() - started) * 1000))
+        out = ProviderTestOut(status="ok", results=len(results), ms=round((time.monotonic() - started) * 1000))
+        # Steam search needs no key, so also check the Web API key + SteamID used by the library import
+        if provider is steam and steam.can_import:
+            try:
+                out.library_games = len(await steam.owned_games())
+            except Exception as exc:
+                out.status, out.error = "error", error_message(exc)
+        return out
 
     async def search_providers(q: str, names: list[str]):
         selected = [get_provider(n) for n in names] if names else [p for p in providers.values() if p.enabled]

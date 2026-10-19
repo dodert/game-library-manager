@@ -132,6 +132,15 @@ class ProviderOut(BaseModel):
     can_import: bool = False
 
 
+class ProviderTestOut(BaseModel):
+    status: Literal["ok", "error", "not_configured"]
+    error: str | None = None
+    results: int | None = None
+    ms: int | None = None
+    # Steam only, when the library import is configured: games in the account
+    library_games: int | None = None
+
+
 class MetadataResult(BaseModel):
     provider: str
     external_id: str
