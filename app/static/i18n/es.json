@@ -7,6 +7,7 @@
   "header.scrape": "Buscar carátulas",
   "header.reset": "Borrar todo",
   "header.add": "+ Añadir juego",
+  "header.barcode": "Añadir por código",
   "common.cancel": "Cancelar",
   "common.close": "Cerrar",
   "common.save": "Guardar",
@@ -202,5 +203,18 @@
   "reset.nothing": "No se ha borrado nada.",
   "reset.done": "Biblioteca vacía: {games} juegos y {platforms} plataformas añadidas borrados.",
   "about.built": "compilada {date} UTC",
-  "about.database": "{db}, esquema {schema}"
+  "about.database": "{db}, esquema {schema}",
+  "barcode.title": "Añadir por código de barras",
+  "barcode.code": "Código de barras (EAN / UPC)",
+  "barcode.hint": "Escríbelo o usa un lector USB. El nombre se busca en UPCitemdb (gratis, 100 consultas al día) y luego en tus fuentes.",
+  "barcode.scan": "📷 Escanear",
+  "barcode.search": "Buscar",
+  "barcode.searching": "Buscando…",
+  "barcode.invalid": "Un código de barras tiene de 8 a 14 dígitos.",
+  "barcode.owned": "Ya lo tienes en la biblioteca: {games}.",
+  "barcode.not_found": "UPCitemdb no conoce este código; escribe tú el título.",
+  "barcode.lookup_error": "No se ha podido buscar el código ({error}); escribe tú el título.",
+  "barcode.add_anyway": "Añadir igualmente",
+  "barcode.add_manually": "Continuar",
+  "barcode.camera_error": "Cámara no disponible: {error}"
 }

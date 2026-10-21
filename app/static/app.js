@@ -534,6 +534,105 @@ $("#steam-import-btn").addEventListener("click", async () => {
 });
 $("#cancel-btn").addEventListener("click", () => $("#dlg").close());
 $("#add-btn").addEventListener("click", () => openDialog(null));
+
+// Add by barcode: games already in the library with that code, then the product name from
+// UPCitemdb, then the usual online search in the game dialog
+let barcodeResult = null;
+let barcodeStream = null;
+// The browser's barcode reader needs Chrome/Edge (Android, macOS...) and HTTPS
+const canScan = "BarcodeDetector" in window && !!navigator.mediaDevices?.getUserMedia;
+
+function barcodeStatus(text, { error = false, action = "" } = {}) {
+  const status = $("#barcode-status");
+  status.hidden = !text;
+  status.textContent = text;
+  status.classList.toggle("error", error);
+  $("#barcode-continue").hidden = !action;
+  $("#barcode-continue").textContent = action;
+}
+
+function stopScan() {
+  barcodeStream?.getTracks().forEach((track) => track.stop());
+  barcodeStream = null;
+  $("#barcode-camera").hidden = true;
+}
+
+function closeBarcode() {
+  stopScan();
+  $("#barcode-dlg").close();
+}
+
+$("#barcode-btn").addEventListener("click", () => {
+  $("#barcode-form").reset();
+  barcodeResult = null;
+  barcodeStatus("");
+  $("#barcode-scan").hidden = !canScan;
+  $("#barcode-dlg").showModal();
+});
+$("#barcode-cancel").addEventListener("click", closeBarcode);
+$("#barcode-dlg").addEventListener("close", stopScan);
+
+$("#barcode-scan").addEventListener("click", async () => {
+  if (barcodeStream) return stopScan();
+  try {
+    const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] });
+    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = $("#barcode-camera video");
+    video.srcObject = barcodeStream;
+    $("#barcode-camera").hidden = false;
+    await video.play();
+    while (barcodeStream) {
+      const [code] = await detector.detect(video);
+      if (code) {
+        stopScan();
+        $("#barcode-form").elements.code.value = code.rawValue;
+        $("#barcode-form").requestSubmit();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  } catch (err) {
+    stopScan();
+    barcodeStatus(t("barcode.camera_error", { error: err.message }), { error: true });
+  }
+});
+
+$("#barcode-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const code = ev.target.elements.code.value.replace(/\D/g, "");
+  if (code.length < 8 || code.length > 14) return barcodeStatus(t("barcode.invalid"), { error: true });
+  barcodeStatus(t("barcode.searching"));
+  try {
+    barcodeResult = await api(`/api/barcode/${code}`);
+  } catch (err) {
+    return barcodeStatus(err.message, { error: true });
+  }
+  const r = barcodeResult;
+  const notes = [];
+  if (r.owned.length) notes.push(t("barcode.owned", { games: r.owned.map((g) => `${g.title} (${g.platform})`).join(", ") }));
+  if (r.error) notes.push(t("barcode.lookup_error", { error: r.error }));
+  else if (!r.product) notes.push(t("barcode.not_found"));
+  if (!notes.length) return addFromBarcode();
+  barcodeStatus(notes.join(" "), { error: !r.owned.length && !r.product, action: r.owned.length ? t("barcode.add_anyway") : t("barcode.add_manually") });
+});
+
+$("#barcode-continue").addEventListener("click", addFromBarcode);
+
+function addFromBarcode() {
+  const r = barcodeResult;
+  closeBarcode();
+  openDialog(null);
+  const form = $("#game-form");
+  form.elements.barcode.value = r.code;
+  form.elements.format.value = "physical";
+  if (r.platform_id) form.elements.platform_id.value = r.platform_id;
+  if (r.title) {
+    form.elements.title.value = r.title;
+    lookup();
+  } else {
+    form.elements.title.focus();
+  }
+}
 $("#grid").addEventListener("click", async (ev) => {
   const th = ev.target.closest("th[data-sort]");
   if (th) return sortBy(th.dataset.sort);

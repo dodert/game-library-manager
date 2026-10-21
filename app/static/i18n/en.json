@@ -7,6 +7,7 @@
   "header.scrape": "Find covers",
   "header.reset": "Delete all",
   "header.add": "+ Add game",
+  "header.barcode": "Add by barcode",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.save": "Save",
@@ -202,5 +203,18 @@
   "reset.nothing": "Nothing was deleted.",
   "reset.done": "Library emptied: {games} games and {platforms} added platforms deleted.",
   "about.built": "built {date} UTC",
-  "about.database": "{db}, schema {schema}"
+  "about.database": "{db}, schema {schema}",
+  "barcode.title": "Add by barcode",
+  "barcode.code": "Barcode (EAN / UPC)",
+  "barcode.hint": "Type it or use a USB barcode reader. The name is looked up in UPCitemdb (free, 100 lookups a day) and then in your sources.",
+  "barcode.scan": "📷 Scan",
+  "barcode.search": "Search",
+  "barcode.searching": "Searching…",
+  "barcode.invalid": "A barcode has 8 to 14 digits.",
+  "barcode.owned": "Already in your library: {games}.",
+  "barcode.not_found": "UPCitemdb doesn't know this code; type the title yourself.",
+  "barcode.lookup_error": "Couldn't look the code up ({error}); type the title yourself.",
+  "barcode.add_anyway": "Add anyway",
+  "barcode.add_manually": "Continue",
+  "barcode.camera_error": "Camera not available: {error}"
 }
