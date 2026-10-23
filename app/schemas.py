@@ -40,6 +40,7 @@ class GameBase(BaseModel):
     genre: str | None = Field(default=None, max_length=150)
     series: str | None = Field(default=None, max_length=150)
     search_title: str | None = Field(default=None, max_length=300)
+    pricecharting_id: int | None = Field(default=None, ge=1)
     item_type: str | None = Field(default=None, max_length=50)
     serial_number: str | None = Field(default=None, max_length=100)
     completeness: str | None = Field(default=None, max_length=30)
@@ -85,6 +86,7 @@ class GameUpdate(BaseModel):
     genre: str | None = Field(default=None, max_length=150)
     series: str | None = Field(default=None, max_length=150)
     search_title: str | None = Field(default=None, max_length=300)
+    pricecharting_id: int | None = Field(default=None, ge=1)
     item_type: str | None = Field(default=None, max_length=50)
     serial_number: str | None = Field(default=None, max_length=100)
     completeness: str | None = Field(default=None, max_length=30)
@@ -133,6 +135,12 @@ class GameOut(GameBase):
     cover_url: str | None = None
     scraped_at: datetime | None = None
     scrape_error: str | None = None
+    price_checked_at: datetime | None = None
+    price_error: str | None = None
+    # From the last PriceCharting check, in US dollars: the price for the item's condition
+    # (loose, cib, new...) times its quantity
+    market_value: float | None = None
+    price_condition: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -260,3 +268,47 @@ class ResetIn(BaseModel):
 class ResetOut(BaseModel):
     games_deleted: int
     platforms_deleted: int
+
+
+class PriceCheckOut(BaseModel):
+    """One PriceCharting check of an item, prices in US dollars."""
+    checked_at: datetime
+    product_id: int
+    product_name: str | None
+    console_name: str | None
+    loose: float | None
+    cib: float | None
+    new: float | None
+    box_only: float | None
+    manual_only: float | None
+    graded: float | None
+
+
+class PriceProductOut(BaseModel):
+    id: int
+    name: str | None
+    console: str | None
+
+
+class PriceJobIn(BaseModel):
+    # due: never checked or older than PRICE_REFRESH_DAYS; all: every physical item not sold
+    mode: Literal["due", "all"] = "due"
+
+
+class PriceStatusOut(BaseModel):
+    enabled: bool
+    refresh_days: int
+    running: bool
+    mode: str | None
+    total: int
+    done: int
+    found: int
+    not_found: int
+    current: str | None
+    started_at: str | None
+    finished_at: str | None
+    cancelled: bool
+    errors: list[str]
+    # Physical items not sold: how many are due a check, and how many there are
+    due: int
+    items: int

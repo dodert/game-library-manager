@@ -22,4 +22,6 @@ services:
       - SCREENSCRAPER_DEV_PASSWORD=
       - SCREENSCRAPER_USER=
       - SCREENSCRAPER_PASSWORD=
+      - PRICECHARTING_TOKEN=
+      - PRICE_REFRESH_DAYS=7
     restart: unless-stopped

@@ -174,19 +174,98 @@ async function searchCovers() {
 }
 
 const money = (n) => n.toLocaleString(i18n.lang, { style: "currency", currency: "EUR" });
+// PriceCharting prices are US dollars
+const usd = (n) => n.toLocaleString(i18n.lang, { style: "currency", currency: "USD" });
 
-// prefix: translation group for the keys (format, completion...); none = show keys as they are
-function bars(title, data, prefix = null) {
+// prefix: translation group for the keys (format, completion...); none = show keys as they are.
+// format: how values are written (counts by default)
+function bars(title, data, prefix = null, format = String) {
   const name = (k) => (prefix ? t(`${prefix}.${k}`) : k);
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
   if (!entries.length) return "";
   const max = Math.max(...entries.map(([, n]) => n));
   return `<section class="panel"><h3>${esc(title)}</h3>${entries.map(([k, n]) => `
-    <div class="bar-row" title="${esc(name(k))}: ${n}">
+    <div class="bar-row${format === String ? "" : " wide"}" title="${esc(name(k))}: ${esc(format(n))}">
       <span class="bar-label">${esc(name(k))}</span>
       <span class="bar-track"><span class="bar" style="width:${(n / max) * 100}%"></span></span>
-      <span class="bar-value">${n}</span>
+      <span class="bar-value">${esc(format(n))}</span>
     </div>`).join("")}</section>`;
+}
+
+// Line chart over dates. series: [{name, cls, values: [number|null] per date}].
+// A crosshair and tooltip follow the pointer; with more than one series there is a legend.
+// width: the space it will have, so the text keeps its size (the SVG scales to fit)
+function lineChart(dates, series, format, width = 600) {
+  const W = Math.round(Math.max(300, Math.min(1100, width))), H = 220, L = 64, R = 12, T = 12, B = 28;
+  const all = series.flatMap((s) => s.values).filter((v) => v != null);
+  if (!all.length) return "";
+  const max = Math.max(...all) * 1.1 || 1;
+  const x = (i) => (dates.length === 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (dates.length - 1));
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  const ticks = [0, 1, 2, 3].map((i) => (max * i) / 3);
+  const grid = ticks.map((v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/>
+    <text class="axis" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${esc(format(v))}</text>`).join("");
+  const xLabels = [0, dates.length - 1].filter((i, n, a) => a.indexOf(i) === n).map((i) =>
+    `<text class="axis" x="${x(i)}" y="${H - 8}" text-anchor="${dates.length === 1 ? "middle" : i ? "end" : "start"}">${esc(dates[i])}</text>`).join("");
+  const lines = series.map((s) => {
+    const pts = s.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`));
+    const path = pts.reduce((d, p, i) => (p ? d + (d && pts[i - 1] ? " L" : " M") + p : d), "");
+    const dots = s.values.map((v, i) => (v == null ? "" : `<circle class="dot" cx="${x(i)}" cy="${y(v)}" r="4"/>`)).join("");
+    return `<g class="series ${s.cls}"><path d="${path}"/>${dots}</g>`;
+  }).join("");
+  const legend = series.length > 1
+    ? `<div class="legend">${series.map((s) => `<span class="${s.cls}"><i></i>${esc(s.name)}</span>`).join("")}</div>` : "";
+  const data = esc(JSON.stringify({ dates, series: series.map((s) => ({ name: s.name, values: s.values })), L, R, W }));
+  return `<div class="chart" data-chart="${data}">${legend}
+    <svg viewBox="0 0 ${W} ${H}" role="img">${grid}${xLabels}${lines}<line class="cross" hidden y1="${T}" y2="${H - B}"/></svg>
+    <div class="tip" hidden></div></div>`;
+}
+
+// Tooltip for every chart: the values of the date nearest the pointer
+document.addEventListener("pointermove", (ev) => {
+  const chart = ev.target.closest?.(".chart");
+  document.querySelectorAll(".chart .tip:not([hidden])").forEach((tip) => {
+    if (tip.parentElement !== chart) { tip.hidden = true; tip.parentElement.querySelector(".cross").setAttribute("hidden", ""); }
+  });
+  if (!chart) return;
+  const { dates, series, L, R, W } = JSON.parse(chart.dataset.chart);
+  const svg = chart.querySelector("svg").getBoundingClientRect();
+  const px = ((ev.clientX - svg.left) / svg.width) * W;
+  const i = dates.length === 1 ? 0 : Math.max(0, Math.min(dates.length - 1, Math.round(((px - L) / (W - L - R)) * (dates.length - 1))));
+  const cx = dates.length === 1 ? (L + W - R) / 2 : L + (i * (W - L - R)) / (dates.length - 1);
+  const cross = chart.querySelector(".cross");
+  cross.removeAttribute("hidden");
+  cross.setAttribute("x1", cx);
+  cross.setAttribute("x2", cx);
+  const tip = chart.querySelector(".tip");
+  tip.innerHTML = `<b>${esc(dates[i])}</b>` + series.filter((s) => s.values[i] != null)
+    .map((s) => `<div>${esc(s.name)}: ${esc(usd(s.values[i]))}</div>`).join("");
+  tip.hidden = false;
+  const left = (cx / W) * svg.width;
+  tip.style.left = `${Math.min(left + 12, svg.width - tip.offsetWidth)}px`;
+});
+
+async function loadPriceStats() {
+  const p = await api("/api/stats/prices");
+  if (!p.enabled && !p.priced) return "";
+  const tiles = `<div class="tiles">
+      <div class="tile"><div class="tile-value">${usd(p.total)}</div><div class="tile-label">${esc(t("prices.market_value"))}</div></div>
+      <div class="tile"><div class="tile-value">${p.priced}/${p.items}</div><div class="tile-label">${esc(t("prices.priced"))}</div></div>
+    </div>`;
+  const history = p.history.length
+    ? `<section class="panel wide-panel"><h3>${esc(t("prices.history_total"))}</h3>${lineChart(
+      p.history.map((h) => h.date), [{ name: t("prices.market_value"), cls: "s1", values: p.history.map((h) => h.value) }], usd,
+      $("#stats-view").clientWidth - 66)}</section>` : "";
+  const top = p.top.length ? `<section class="panel"><h3>${esc(t("prices.top"))}</h3>${p.top.map((g) => `
+    <div class="bar-row wide top-item" data-id="${g.id}" title="${esc(g.title)} · ${esc(g.platform)}: ${esc(usd(g.value))}">
+      <span class="bar-label">${esc(g.title)}</span>
+      <span class="bar-track"><span class="bar" style="width:${(g.value / p.top[0].value) * 100}%"></span></span>
+      <span class="bar-value">${esc(usd(g.value))}</span>
+    </div>`).join("")}</section>` : "";
+  const last = p.last_check ? t("prices.last_check", { date: p.last_check.slice(0, 16).replace("T", " ") }) : t("prices.never_checked");
+  return `<h2 class="stats-heading">${esc(t("prices.title"))}</h2>${tiles}
+    <div class="panels">${history}${bars(t("prices.by_platform"), p.by_platform, null, usd)}${top}</div>
+    <p class="hint">${esc(last)} · ${esc(t("prices.stats_hint"))}</p>`;
 }
 
 async function loadStats() {
@@ -211,8 +290,15 @@ async function loadStats() {
       ${bars(t("stats.by_format"), s.by_format, "format")}
       ${bars(t("stats.by_completion"), s.by_completion, "completion")}
     </div>
-    <p class="hint">${esc(t("stats.hint"))}</p>`;
+    <p class="hint">${esc(t("stats.hint"))}</p>
+    <div id="price-stats"></div>`;
+  try { $("#price-stats").innerHTML = await loadPriceStats(); } catch { /* prices are optional */ }
 }
+
+$("#stats-view").addEventListener("click", async (ev) => {
+  const item = ev.target.closest(".top-item");
+  if (item) openDialog(await api(`/api/games/${item.dataset.id}`));
+});
 
 function setTab(name) {
   tab = name;
@@ -247,6 +333,7 @@ const cardHtml = (g) => `
         <div class="title">${esc(g.title)}</div>
         <div class="meta">${esc(g.platform.name)}${g.release_year ? " · " + g.release_year : ""}</div>
         <span>${badges(g)}</span>
+        ${g.market_value != null ? `<div class="meta price" title="${esc(t("prices.market_value"))}">${esc(usd(g.market_value))}</div>` : ""}
         ${g.loaned_to ? `<div class="meta">→ ${esc(g.loaned_to)}${g.loaned_at ? " · " + esc(g.loaned_at) : ""}</div>` : ""}
       </div>
     </article>`;
@@ -254,12 +341,15 @@ const cardHtml = (g) => `
 // Sort keys of the API, one per column; the header is the text "column.<key>"
 const COLUMNS = [
   "title", "platform", "release_year", "format", "status", "completion", "store", "purchase_date",
-  "purchase_price", "rating", "item_type",
+  "purchase_price", "market_value", "rating", "item_type",
 ];
+// Columns the API can't sort by
+const UNSORTED = new Set(["market_value"]);
 
 function tableHead() {
   const sort = $("#sort").value;
   const th = (key) => {
+    if (UNSORTED.has(key)) return `<th>${esc(t(`column.${key}`))}</th>`;
     const label = esc(t(`column.${key}`));
     const dir = sort === key ? "asc" : sort === `-${key}` ? "desc" : null;
     return `<th data-sort="${key}"${dir ? ` aria-sort="${dir === "asc" ? "ascending" : "descending"}"` : ""} title="${esc(t("column.sort_by", { column: t(`column.${key}`) }))}">${label}${dir ? (dir === "asc" ? " ▲" : " ▼") : ""}</th>`;
@@ -294,6 +384,7 @@ const rowHtml = (g) => `
       <td>${esc(g.store)}</td>
       <td class="num">${esc(g.purchase_date)}</td>
       <td class="num">${g.purchase_price != null ? money(g.purchase_price) : ""}</td>
+      <td class="num">${g.market_value != null ? usd(g.market_value) : ""}</td>
       <td class="num">${g.rating != null ? `${g.rating}/10` : ""}</td>
       <td>${g.item_type ? esc(g.item_type) : t("kind.game")}</td>
     </tr>`;
@@ -481,6 +572,7 @@ function openDialog(game) {
   $("#scrape-info").textContent = game?.scraped_at
     ? t("game.last_lookup", { date: game.scraped_at.slice(0, 16).replace("T", " ") }) + (game.scrape_error ? ` · ${game.scrape_error}` : "")
     : "";
+  renderPricePane(game).catch((err) => { $("#price-info").textContent = err.message; });
   $("#dlg").showModal();
 }
 
@@ -735,6 +827,151 @@ document.querySelectorAll(".views [data-view]").forEach((b) => {
   b.addEventListener("click", () => setView(b.dataset.view));
 });
 
+// Prices pane of the item dialog
+let priceStatus = { enabled: false };
+const PRICE_SERIES = [["loose", "s1"], ["cib", "s2"], ["new", "s3"]];
+const PRICE_CONDITIONS = ["loose", "cib", "new", "box_only", "manual_only", "graded"];
+
+async function renderPricePane(game) {
+  const enabled = priceStatus.enabled;
+  $("#price-unavailable").hidden = enabled && !!game;
+  $("#price-unavailable").textContent = !enabled ? t("prices.not_configured") : t("prices.save_first");
+  $("#price-body").hidden = !enabled || !game;
+  $("#price-results").hidden = true;
+  $("#price-info").innerHTML = "";
+  $("#price-chart").innerHTML = "";
+  if (!enabled || !game) return;
+  const history = await api(`/api/games/${game.id}/prices`);
+  if ($("#game-form").elements.id.value !== String(game.id)) return;  // another item was opened meanwhile
+  const last = history.at(-1);
+  const lines = [];
+  if (game.market_value != null) {
+    const qty = game.quantity > 1 ? ` × ${game.quantity}` : "";
+    lines.push(`<div class="price-value">${esc(usd(game.market_value))} <span class="hint">${esc(t(`prices.condition.${game.price_condition}`))}${qty}</span></div>`);
+  } else if (last) {
+    lines.push(`<div class="hint">${esc(t("prices.no_price_for", { condition: t(`prices.condition.${game.price_condition}`) }))}</div>`);
+  }
+  if (last) {
+    lines.push(`<div>${esc(last.product_name ?? "")} · ${esc(last.console_name ?? "")}</div>`);
+    lines.push(`<div class="price-list">${PRICE_CONDITIONS.filter((k) => last[k] != null)
+      .map((k) => `<span>${esc(t(`prices.condition.${k}`))}: <b>${esc(usd(last[k]))}</b></span>`).join("")}</div>`);
+  }
+  if (game.price_checked_at) {
+    lines.push(`<div class="hint">${esc(t("prices.checked", { date: game.price_checked_at.slice(0, 16).replace("T", " ") }))}${game.price_error ? ` · <span class="error">${esc(game.price_error)}</span>` : ""}</div>`);
+  } else {
+    lines.push(`<div class="hint">${esc(t("prices.never_checked"))}</div>`);
+  }
+  $("#price-info").innerHTML = lines.join("");
+  if (history.length) {
+    const dates = history.map((h) => h.checked_at.slice(0, 10));
+    $("#price-chart").innerHTML = `<h4>${esc(t("prices.history"))}</h4>` + lineChart(dates,
+      PRICE_SERIES.map(([k, cls]) => ({ name: t(`prices.condition.${k}`), cls, values: history.map((h) => h[k]) }))
+        .filter((s) => s.values.some((v) => v != null)), usd, Math.min(600, window.innerWidth - 64));
+  }
+}
+
+async function checkPrice() {
+  const form = $("#game-form");
+  const id = form.elements.id.value;
+  const button = $("#price-check-btn");
+  const value = form.elements.pricecharting_id.value;
+  button.disabled = true;
+  $("#price-info").innerHTML = `<div class="hint">${esc(t("prices.checking"))}</div>`;
+  try {
+    await api(`/api/games/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pricecharting_id: value ? Number(value) : null }),
+    });
+    await api(`/api/games/${id}/price`, { method: "POST" }).catch(() => null);
+    const game = await api(`/api/games/${id}`);
+    form.elements.pricecharting_id.value = game.pricecharting_id ?? "";
+    await renderPricePane(game);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function searchPriceProducts() {
+  const box = $("#price-results");
+  box.hidden = false;
+  box.innerHTML = `<div class="hint">${esc(t("prices.searching"))}</div>`;
+  const f = $("#game-form").elements;
+  const q = `${searchText()} ${f.platform_id.selectedOptions[0]?.textContent ?? ""}`.trim();
+  try {
+    const products = await api(`/api/prices/search?q=${encodeURIComponent(q)}`);
+    box.innerHTML = products.length ? products.map((p) => `
+      <button type="button" class="result" data-id="${p.id}"><div>
+        <div class="r-title">${esc(p.name)}</div><div class="r-meta">${esc(p.console)} · ID ${p.id}</div>
+      </div></button>`).join("") : `<div class="hint">${esc(t("prices.no_products"))}</div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="hint error">${esc(err.message)}</div>`;
+  }
+}
+
+$("#price-check-btn").addEventListener("click", checkPrice);
+$("#price-search-btn").addEventListener("click", searchPriceProducts);
+$("#price-results").addEventListener("click", (ev) => {
+  const el = ev.target.closest(".result");
+  if (!el) return;
+  $("#game-form").elements.pricecharting_id.value = el.dataset.id;
+  $("#price-results").hidden = true;
+  checkPrice();
+});
+
+// Prices section of the settings
+let pricePoll = null;
+
+function renderPriceSettings(st) {
+  priceStatus = st;
+  $("#prices-info").textContent = !st.enabled ? t("prices.not_configured")
+    : t(st.refresh_days > 0 ? "prices.auto" : "prices.manual", { days: st.refresh_days, items: st.items });
+  for (const id of ["#prices-test", "#prices-due", "#prices-all"]) $(id).hidden = !st.enabled;
+  $("#prices-due").textContent = t("prices.check_due", { n: st.due });
+  $("#prices-all").textContent = t("prices.check_all", { n: st.items });
+  $("#prices-due").disabled = $("#prices-all").disabled = st.running;
+  $("#prices-cancel").hidden = !st.running;
+  const progress = $("#prices-progress");
+  progress.hidden = !st.running && !st.finished_at;
+  const counts = t("prices.counts", { found: st.found, not_found: st.not_found });
+  progress.textContent = st.running
+    ? `${t("prices.running", { done: st.done, total: st.total })}${st.current ? ` · ${st.current}` : ""} · ${counts}`
+    : `${t(st.cancelled ? "scrape.cancelled" : "scrape.finished")}: ${st.done}/${st.total} · ${counts}` +
+      (st.errors.length ? ` · ${st.errors.slice(0, 3).join(" | ")}` : "");
+}
+
+async function pollPrices() {
+  const st = await api("/api/prices");
+  renderPriceSettings(st);
+  if (st.running) pricePoll = setTimeout(pollPrices, 2000);
+  else if (pricePoll) { pricePoll = null; refresh(); }
+}
+
+async function startPrices(mode) {
+  try {
+    renderPriceSettings(await api("/api/prices", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+    }));
+    if (!pricePoll) pricePoll = setTimeout(pollPrices, 1000);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+$("#prices-due").addEventListener("click", () => startPrices("due"));
+$("#prices-all").addEventListener("click", () => startPrices("all"));
+$("#prices-cancel").addEventListener("click", async () => renderPriceSettings(await api("/api/prices/cancel", { method: "POST" })));
+$("#prices-test").addEventListener("click", async () => {
+  const info = $("#prices-progress");
+  info.hidden = false;
+  info.textContent = t("settings.testing");
+  try {
+    const r = await api("/api/prices/test", { method: "POST" });
+    info.textContent = r.status === "ok" ? t("settings.test_ok", { results: r.results, ms: r.ms }) : t("settings.test_error", { error: r.error });
+  } catch (err) {
+    info.textContent = t("settings.test_error", { error: err.message });
+  }
+});
+
 let scrapePoll = null;
 
 function renderScrape(st) {
@@ -849,6 +1086,7 @@ async function openSettings() {
   $("#lang-select").innerHTML = languages.map((l) => `<option value="${esc(l.code)}">${esc(l.name)}</option>`).join("");
   $("#lang-select").value = i18n.lang;
   renderProviderTests();
+  pollPrices();
   $("#settings-dlg").showModal();
 }
 
@@ -910,5 +1148,6 @@ initI18n().finally(() => {
   renderPager();
   Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
   loadAbout();
+  api("/api/prices").then((st) => { priceStatus = st; }).catch(() => {});
   api("/api/scrape").then((st) => { if (st.running) pollScrape(); });
 });

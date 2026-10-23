@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections import defaultdict
 import time
 import unicodedata
 import uuid
@@ -14,7 +15,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
 
 from . import __version__
 from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
@@ -23,12 +24,17 @@ from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
 from .images import IMAGE_TYPES, MAX_IMAGE_BYTES, ImageError, fetch_image, save_first_cover
 from .migrate import upgrade_database
-from .models import Game, GameFormat, GameStatus, Platform
+from .models import Game, GameFormat, GameStatus, Platform, PriceCheck
+from .prices import (
+    COLLECTION, PRICE_KEYS, PRICED, PriceCharting, PriceChartingError, PriceChecker, cents, check_game, item_value,
+    latest_checks, price_condition,
+)
 from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider, error_message
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
     BarcodeGameOut, BarcodeOut, CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
-    ProviderOut, ProviderTestOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
+    PriceCheckOut, PriceJobIn, PriceProductOut, PriceStatusOut, ProviderOut, ProviderTestOut, ResetIn, ResetOut, ScrapeIn,
+    ScrapeStatusOut, SteamImportOut,
 )
 from .scraper import Scraper, cover_options
 from .seed import DEFAULT_PLATFORMS, seed_platforms
@@ -121,11 +127,16 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     }
 
     scraper = Scraper(SessionLocal, http, providers, covers_dir, delay=settings.scrape_delay)
+    pricecharting = PriceCharting(http, settings.pricecharting_token, settings.price_delay)
+    price_checker = PriceChecker(SessionLocal, pricecharting, settings.price_refresh_days)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        auto_prices = asyncio.create_task(price_checker.run_forever())
         yield
+        auto_prices.cancel()
         scraper.cancel()
+        price_checker.cancel()
         await http.aclose()
 
     version = settings.app_version if settings.app_version and settings.app_version != "dev" else __version__
@@ -142,10 +153,16 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         with SessionLocal() as db:
             yield db
 
-    def to_out(game: Game) -> GameOut:
+    def to_out(game: Game, check: PriceCheck | None = None) -> GameOut:
+        """check: the item's last price check (looked up when not given)."""
         out = GameOut.model_validate(game)
         if game.cover_path:
             out.cover_url = f"/covers/{game.cover_path}"
+        if check is None and game.price_checked_at:
+            check = latest_checks(object_session(game), [game.id]).get(game.id)
+        if check:
+            out.market_value = cents(item_value(game, check))
+            out.price_condition = price_condition(game)
         return out
 
     def get_game_or_404(db: Session, game_id: int) -> Game:
@@ -216,7 +233,8 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         games = db.scalars(
             stmt.options(selectinload(Game.platform)).order_by(*order).limit(limit).offset(offset)
         ).all()
-        return GamePage(total=total, items=[to_out(g) for g in games])
+        checks = latest_checks(db, [g.id for g in games])
+        return GamePage(total=total, items=[to_out(g, checks.get(g.id)) for g in games])
 
     @app.get("/api/games/letters")
     def game_letters(
@@ -472,6 +490,130 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         db.commit()
         background.add_task(download_steam_covers, [g.id for g in new_games])
         return SteamImportOut(imported=len(new_games), skipped=len(owned) - len(new_games))
+
+    def require_prices() -> PriceCharting:
+        if not pricecharting.enabled:
+            raise HTTPException(400, "Set PRICECHARTING_TOKEN to look up prices")
+        return pricecharting
+
+    def price_status(db: Session) -> PriceStatusOut:
+        return PriceStatusOut(
+            **price_checker.status_dict(),
+            enabled=pricecharting.enabled,
+            refresh_days=settings.price_refresh_days,
+            due=db.scalar(select(func.count(Game.id)).where(*PRICED, price_checker.due_filter())),
+            items=db.scalar(select(func.count(Game.id)).where(*PRICED)),
+        )
+
+    @app.get("/api/prices", response_model=PriceStatusOut)
+    def get_prices(db: Session = Depends(get_db)):
+        return price_status(db)
+
+    @app.post("/api/prices", response_model=PriceStatusOut, status_code=202)
+    async def start_prices(data: PriceJobIn, db: Session = Depends(get_db)):
+        """Check the prices of the physical items not sold: the ones due, or all."""
+        try:
+            price_checker.start(data.mode)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc))
+        return price_status(db)
+
+    @app.post("/api/prices/cancel", response_model=PriceStatusOut)
+    def cancel_prices(db: Session = Depends(get_db)):
+        price_checker.cancel()
+        return price_status(db)
+
+    @app.post("/api/prices/test", response_model=ProviderTestOut)
+    async def test_prices():
+        """Check the PriceCharting token with a real search for a well-known game."""
+        if not pricecharting.enabled:
+            return ProviderTestOut(status="not_configured")
+        started = time.monotonic()
+        try:
+            results = await pricecharting.search(PROVIDER_TEST_QUERY)
+        except Exception as exc:
+            return ProviderTestOut(status="error", error=error_message(exc), ms=round((time.monotonic() - started) * 1000))
+        return ProviderTestOut(status="ok", results=len(results), ms=round((time.monotonic() - started) * 1000))
+
+    @app.get("/api/prices/search", response_model=list[PriceProductOut])
+    async def search_prices(q: str = Query(min_length=1, max_length=300)):
+        """PriceCharting products matching a text, to pick the right one for an item."""
+        try:
+            return await require_prices().search(q)
+        except (PriceChartingError, httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(502, error_message(exc))
+
+    @app.post("/api/games/{game_id}/price", response_model=GameOut)
+    async def check_price(game_id: int, db: Session = Depends(get_db)):
+        """Look the item's prices up now (and keep them in its history)."""
+        client = require_prices()
+        game = get_game_or_404(db, game_id)
+        check = await check_game(client, db, game)
+        db.commit()
+        if not check:
+            raise HTTPException(502, game.price_error or "Not found")
+        return to_out(get_game_or_404(db, game_id))
+
+    @app.get("/api/games/{game_id}/prices", response_model=list[PriceCheckOut])
+    def price_history(game_id: int, db: Session = Depends(get_db)):
+        get_game_or_404(db, game_id)
+        checks = db.scalars(select(PriceCheck).where(PriceCheck.game_id == game_id).order_by(PriceCheck.checked_at, PriceCheck.id))
+        return [
+            PriceCheckOut(
+                checked_at=c.checked_at, product_id=c.product_id, product_name=c.product_name, console_name=c.console_name,
+                **{key: cents(getattr(c, key)) for key in PRICE_KEYS},
+            )
+            for c in checks
+        ]
+
+    @app.get("/api/stats/prices")
+    def price_stats(db: Session = Depends(get_db)):
+        """Market value of the collection (owned and lent physical items) from the last checks,
+        by platform, the most valuable items, and the total over time. US dollars."""
+        games = db.scalars(select(Game).options(selectinload(Game.platform)).where(*PRICED, COLLECTION)).all()
+        by_id = {g.id: g for g in games}
+        latest = latest_checks(db, list(by_id))
+        values = {gid: item_value(by_id[gid], check) for gid, check in latest.items()}
+        values = {gid: v for gid, v in values.items() if v is not None}
+        by_platform: dict[str, int] = defaultdict(int)
+        for gid, value in values.items():
+            by_platform[by_id[gid].platform.name] += value
+        top = sorted(values.items(), key=lambda kv: -kv[1])[:10]
+
+        # Total per day: each item counts with its last check up to that day
+        history, current, day = [], {}, None
+        checks = db.execute(
+            select(PriceCheck).where(PriceCheck.game_id.in_(list(by_id))).order_by(PriceCheck.checked_at, PriceCheck.id)
+        ).scalars() if by_id else []
+        for check in checks:
+            check_day = check.checked_at.date().isoformat()
+            if day and check_day != day:
+                history.append({"date": day, "value": cents(sum(current.values()))})
+            day = check_day
+            value = item_value(by_id[check.game_id], check)
+            if value is None:
+                current.pop(check.game_id, None)
+            else:
+                current[check.game_id] = value
+        if day:
+            history.append({"date": day, "value": cents(sum(current.values()))})
+
+        return {
+            "currency": "USD",
+            "enabled": pricecharting.enabled,
+            "total": cents(sum(values.values())),
+            "priced": len(values),
+            "items": len(games),
+            "last_check": max((c.checked_at for c in latest.values()), default=None),
+            "by_platform": {k: cents(v) for k, v in sorted(by_platform.items(), key=lambda kv: -kv[1])},
+            "top": [
+                {"id": gid, "title": by_id[gid].title, "platform": by_id[gid].platform.name, "value": cents(value)}
+                for gid, value in top
+            ],
+            "history": history,
+        }
 
     @app.get("/api/stats")
     def stats(db: Session = Depends(get_db)):

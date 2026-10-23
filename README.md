@@ -106,6 +106,15 @@ To check the keys, open **⚙ Settings → Scraping sources** and click **Test**
 
 In the add/edit dialog, **Buscar en internet** searches every enabled provider and lets you pick metadata and a cover; the cover is downloaded and stored in `DATA_DIR/covers`. **Buscar carátulas** (General tab, next to the cover) shows every cover the providers have for the title, closest title matches first, so you can pick one when there is more than one; it is downloaded when you save. **Importar Steam** adds your owned Steam games and downloads their covers in the background.
 
+### Market prices (PriceCharting)
+
+Set `PRICECHARTING_TOKEN` to get the market price of your physical items (not sold, wishlist included) from [PriceCharting](https://www.pricecharting.com/api-documentation). The API is a **paid** PriceCharting subscription; the token is on its Subscription page under **API/Download**. Prices are in US dollars.
+
+- Each item is matched by its PriceCharting product ID if set, else its barcode, else "*Search as* (or title) + platform". The product found is kept, so later checks follow it; if it's the wrong one (another region, edition…), open the item → **Prices** → **Pick product**, or type the product ID.
+- The value of an item is the price for its *Completeness* (`CIB`, `New`/`Nuevo`, `Loose`/`Suelto`, `Box only`, `Manual only`, `Graded`; with no completeness, box + manual = CIB, otherwise loose) times its quantity.
+- Every check is kept: the item's **Prices** tab shows the loose / CIB / new history, and **Statistics** shows the collection value, its evolution, the value by platform and the most valuable items.
+- Items are checked automatically every `PRICE_REFRESH_DAYS` days (default `7`, `0` = only when asked); **⚙ Settings → Market prices** tests the token and checks the pending items or all of them. The API allows one call a second, so a big library takes a while.
+
 ## Tests
 
 ```bash

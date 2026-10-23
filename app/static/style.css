@@ -134,3 +134,34 @@ form label.radio input { width: auto; }
 #letters button.current { color: var(--surface); background: var(--accent); border-radius: 4px; }
 body.has-letters .grid, body.has-letters #pager { padding-right: 1.8rem; }
 table.games tbody tr, .grid > .card { scroll-margin-top: 2.6rem; }
+
+/* Market prices */
+.button-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+.card .meta.price { color: var(--text); font-variant-numeric: tabular-nums; }
+.bar-row.wide { grid-template-columns: minmax(80px, 140px) 1fr 9ch; }
+.top-item { cursor: pointer; }
+.panel.wide-panel { grid-column: 1 / -1; }
+.stats-heading { font-size: 1.1rem; margin: 1.5rem 0 1rem; }
+.price-row { align-items: flex-end; gap: .5rem; flex-wrap: wrap; }
+.price-row button { margin-bottom: .6rem; }
+#price-info { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .6rem; font-size: .9rem; }
+.price-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.price-list { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-variant-numeric: tabular-nums; }
+#price-info .error, #price-results .error { color: var(--danger); }
+#price-results { display: flex; flex-direction: column; gap: .3rem; max-height: 220px; overflow-y: auto; margin-bottom: .6rem; }
+#price-results .result { text-align: left; }
+#price-chart h4 { margin: .4rem 0; font-size: .85rem; color: var(--muted); }
+.chart { position: relative; --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
+@media (prefers-color-scheme: dark) { .chart { --s1: #3987e5; --s2: #d95926; --s3: #199e70; } }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .series path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { stroke: var(--surface); stroke-width: 2; }
+.chart .s1 path { stroke: var(--s1); } .chart .s1 .dot, .legend .s1 i { fill: var(--s1); background: var(--s1); }
+.chart .s2 path { stroke: var(--s2); } .chart .s2 .dot, .legend .s2 i { fill: var(--s2); background: var(--s2); }
+.chart .s3 path { stroke: var(--s3); } .chart .s3 .dot, .legend .s3 i { fill: var(--s3); background: var(--s3); }
+.chart .cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.legend { display: flex; gap: 1rem; font-size: .8rem; color: var(--text); margin-bottom: .3rem; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: .35rem; vertical-align: -1px; }
+.tip { position: absolute; top: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .35rem .55rem; font-size: .8rem; pointer-events: none; white-space: nowrap; box-shadow: 0 2px 8px rgb(0 0 0 / .15); z-index: 2; font-variant-numeric: tabular-nums; }

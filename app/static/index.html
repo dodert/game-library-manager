@@ -44,6 +44,15 @@
       <p class="hint" data-i18n="settings.providers_hint">Checks each source's keys and connection with a test search.</p>
       <ul id="provider-tests"></ul>
       <button type="button" id="provider-test-all" data-i18n="settings.test_all">Test all</button>
+      <h3 data-i18n="prices.title">Market prices (PriceCharting)</h3>
+      <p class="hint" id="prices-info"></p>
+      <p class="hint" id="prices-progress" hidden></p>
+      <div class="button-row">
+        <button type="button" id="prices-test" data-i18n="settings.test">Test</button>
+        <button type="button" id="prices-due"></button>
+        <button type="button" id="prices-all"></button>
+        <button type="button" id="prices-cancel" hidden data-i18n="common.cancel">Cancel</button>
+      </div>
       <menu>
         <span class="spacer"></span>
         <button type="button" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
@@ -195,6 +204,7 @@
         <button type="button" role="tab" data-pane="details" aria-selected="false" data-i18n="pane.details">Details</button>
         <button type="button" role="tab" data-pane="collection" aria-selected="false" data-i18n="pane.collection">Collection</button>
         <button type="button" role="tab" data-pane="personal" aria-selected="false" data-i18n="pane.personal">Personal</button>
+        <button type="button" role="tab" data-pane="prices" aria-selected="false" data-i18n="pane.prices">Prices</button>
       </nav>
 
       <div class="pane" data-pane="general">
@@ -304,6 +314,19 @@
           <label><span data-i18n="field.loan_due">Due back</span> <input name="loan_due" type="date"></label>
         </div>
         <label><span data-i18n="field.notes">Notes</span> <textarea name="notes" rows="3"></textarea></label>
+      </div>
+      <div class="pane" data-pane="prices" hidden>
+        <p class="hint" id="price-unavailable" hidden></p>
+        <div id="price-body">
+          <div id="price-info"></div>
+          <div class="row price-row">
+            <label><span data-i18n="field.pricecharting_id">PriceCharting product ID</span> <input name="pricecharting_id" type="number" min="1" data-type="number" placeholder="Empty = by barcode or title" data-i18n-placeholder="field.pricecharting_id_placeholder"></label>
+            <button type="button" id="price-check-btn" data-i18n="prices.check_now">Check now</button>
+            <button type="button" id="price-search-btn" data-i18n="prices.pick_product">Pick product</button>
+          </div>
+          <div id="price-results" hidden></div>
+          <div id="price-chart"></div>
+        </div>
       </div>
       <datalist id="item-types"><option value="Console"><option value="Controller"><option value="Accessory"><option value="Amiibo"></datalist>
       <datalist id="completeness-list"><option value="CIB"><option value="New"><option value="Loose"><option value="Box only"></datalist>

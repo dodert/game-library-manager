@@ -88,7 +88,35 @@ class Game(Base):
     scrape_error: Mapped[str | None] = mapped_column(String(300))
     # Looked up online instead of the title when set (e.g. "Zelda Tears of the Kingdom" for a special edition)
     search_title: Mapped[str | None] = mapped_column(String(300))
+    # PriceCharting product the prices come from (found by barcode or title, or picked by hand)
+    pricecharting_id: Mapped[int | None]
+    price_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    price_error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     platform: Mapped[Platform] = relationship(back_populates="games")
+    price_checks: Mapped[list["PriceCheck"]] = relationship(
+        back_populates="game", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class PriceCheck(Base):
+    """One PriceCharting lookup of an item: its market prices at that moment, in US cents.
+    Every check is kept, so the history shows how the prices move."""
+    __tablename__ = "price_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), index=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    product_id: Mapped[int]
+    product_name: Mapped[str | None] = mapped_column(String(300))
+    console_name: Mapped[str | None] = mapped_column(String(150))
+    loose: Mapped[int | None]
+    cib: Mapped[int | None]
+    new: Mapped[int | None]
+    box_only: Mapped[int | None]
+    manual_only: Mapped[int | None]
+    graded: Mapped[int | None]
+
+    game: Mapped[Game] = relationship(back_populates="price_checks")

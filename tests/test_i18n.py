@@ -16,7 +16,8 @@ EN = json.loads((STATIC / "i18n" / "en.json").read_text(encoding="utf-8"))
 # Keys built at run time: t(`format.${g.format}`) and the like
 DYNAMIC = {
     "column": ["title", "platform", "release_year", "format", "status", "completion", "store",
-               "purchase_date", "purchase_price", "rating", "item_type"],
+               "purchase_date", "purchase_price", "market_value", "rating", "item_type"],
+    "prices.condition": ["loose", "cib", "new", "box_only", "manual_only", "graded"],
     "format": ["physical", "digital"],
     "status": ["owned", "wishlist", "lent", "sold"],
     "completion": ["unplayed", "playing", "completed", "abandoned"],

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +31,19 @@ class Settings(BaseSettings):
     screenscraper_dev_password: str = ""
     screenscraper_user: str = ""
     screenscraper_password: str = ""
+
+    # Market prices (paid PriceCharting subscription: Subscription page -> API/Download)
+    pricecharting_token: str = ""
+    # Days between automatic price checks of each item; 0 = only when asked
+    price_refresh_days: int = 7
+    # Seconds between PriceCharting calls (the API allows one a second)
+    price_delay: float = 1.1
+
+    @field_validator("price_refresh_days", mode="before")
+    @classmethod
+    def _empty_is_default(cls, value):
+        # An empty field in the Unraid template or docker-compose means "default"
+        return 7 if isinstance(value, str) and not value.strip() else value
 
     @property
     def resolved_database_url(self) -> str:
