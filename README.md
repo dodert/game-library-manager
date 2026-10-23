@@ -39,6 +39,8 @@ To try a branch before merging it: **Actions → CI → Run workflow**, pick the
 
 To delete old image versions: **Actions → Clean up old images → Run workflow**. It deletes versions older than the cut-off (default 4 weeks) that are not among the most recent tagged ones (default 10), plus old untagged leftovers; the amd64/arm64 images inside a kept tag are protected. It runs as a dry run (only lists what it would delete) unless you untick *dry-run*. It needs the repository to have the Admin role in the package's *Manage Actions access*.
 
+**Actions → Delete untagged images → Run workflow** deletes only the untagged versions (old builds whose tags moved to a newer one), whatever their age beyond a short cut-off (default 1 hour). Tagged versions and the amd64/arm64 images inside them are kept. Also a dry run by default.
+
 ```bash
 docker run -d --name game-library-manager -p 8000:8000 \
   -v /path/to/data:/data -e PUID=1000 -e PGID=1000 \
