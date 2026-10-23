@@ -8,6 +8,7 @@ from typing import Literal
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select, text
@@ -15,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
+from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
@@ -24,7 +26,7 @@ from .models import Game, GameFormat, GameStatus, Platform
 from .providers import IGDBProvider, ScreenScraperProvider, SteamGridDBProvider, SteamProvider, error_message
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .schemas import (
-    CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
+    BarcodeGameOut, BarcodeOut, CoverFetchIn, CoverSearchOut, CsvImportOut, GameIn, GameOut, GamePage, GameUpdate, MetadataSearchOut, PlatformIn, PlatformOut,
     ProviderOut, ProviderTestOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
 from .scraper import Scraper, cover_options
@@ -197,6 +199,37 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             stmt.options(selectinload(Game.platform)).order_by(order, Game.id).limit(limit).offset(offset)
         ).all()
         return GamePage(total=total, items=[to_out(g) for g in games])
+
+    @app.post("/api/barcode/scan")
+    async def barcode_scan(file: UploadFile = File(...)):
+        """Read the EAN/UPC from a photo of the box."""
+        photo = await file.read(MAX_IMAGE_BYTES + 1)
+        if len(photo) > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "Photo too large (max 10 MB)")
+        code = await asyncio.to_thread(read_barcode, photo)
+        if not code:
+            raise HTTPException(422, "No barcode found in the photo")
+        return {"code": code}
+
+    @app.get("/api/barcode/{code}", response_model=BarcodeOut)
+    async def barcode_lookup(code: str = PathParam(pattern=BARCODE_PATTERN), db: Session = Depends(get_db)):
+        """Games already in the library with this EAN/UPC, and the product name from UPCitemdb."""
+        # A 12-digit UPC is the same code as the 13-digit EAN with a leading 0
+        variants = {code, code.lstrip("0"), "0" + code.lstrip("0")}
+        owned = db.scalars(select(Game).options(selectinload(Game.platform)).where(Game.barcode.in_(variants))).all()
+        out = BarcodeOut(code=code, owned=[BarcodeGameOut(id=g.id, title=g.title, platform=g.platform.name) for g in owned])
+        try:
+            product = await lookup_upcitemdb(http, code)
+        except (httpx.HTTPError, ValueError) as exc:
+            out.error = error_message(exc)
+            return out
+        if product:
+            platforms = {p.name: p.id for p in db.scalars(select(Platform))}
+            out.product = product["title"]
+            out.title = clean_title(product["title"], list(platforms))
+            platform = guess_platform(product["title"], list(platforms))
+            out.platform_id = platforms.get(platform) if platform else None
+        return out
 
     @app.get("/api/item-types")
     def list_item_types(db: Session = Depends(get_db)):

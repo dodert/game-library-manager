@@ -21,6 +21,10 @@ The interface is in English by default and also in Spanish. Change it in **⚙ S
 
 To add a language, copy `app/static/i18n/en.json` to `app/static/i18n/<code>.json` (for example `fr.json`), set `"_name"` to the language's own name (`"Français"`) and translate the values, keeping placeholders such as `{n}` as they are. It shows up in Settings with no other change; any text left out falls back to English. `tests/test_i18n.py` checks that every language has all the texts and placeholders.
 
+## Add by barcode
+
+**Add by barcode** takes an EAN/UPC: type it, use a USB barcode reader (it types the code and presses Enter), scan it live with the camera (Chrome/Edge over HTTPS) or, on other browsers such as any iPhone browser, take a photo of it and the server reads the code. The app first warns if a game in the library already has that code. None of the metadata providers search by barcode, so the product name comes from [UPCitemdb](https://www.upcitemdb.com) (free plan: no key, 100 lookups a day). The platform and packaging words are stripped from that name, the platform is picked when the name mentions it, and the game dialog opens with the usual online search already run. If UPCitemdb doesn't know the code, you type the title and the code is still saved.
+
 ## Import / export
 
 - **Exportar CSV** downloads the whole library (`/api/export/csv`).

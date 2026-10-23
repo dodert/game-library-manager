@@ -109,6 +109,23 @@ class GameUpdate(BaseModel):
         return self
 
 
+class BarcodeGameOut(BaseModel):
+    id: int
+    title: str
+    platform: str
+
+
+class BarcodeOut(BaseModel):
+    code: str
+    # Games in the library that already have this barcode
+    owned: list[BarcodeGameOut] = []
+    # Product name from the barcode database, and the title/platform guessed from it
+    product: str | None = None
+    title: str | None = None
+    platform_id: int | None = None
+    error: str | None = None
+
+
 class GameOut(GameBase):
     model_config = ConfigDict(from_attributes=True)
     id: int

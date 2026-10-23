@@ -24,6 +24,7 @@
     <button id="scrape-btn" data-i18n="header.scrape">Find covers</button>
     <button id="reset-btn" class="danger" data-i18n="header.reset">Delete all</button>
     <button id="settings-btn" data-i18n-title="settings.title" data-i18n-aria-label="settings.title" title="Settings" aria-label="Settings">⚙</button>
+    <button id="barcode-btn" data-i18n="header.barcode">Add by barcode</button>
     <button id="add-btn" data-i18n="header.add">+ Add game</button>
   </header>
 
@@ -47,6 +48,25 @@
         <span class="spacer"></span>
         <button type="button" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
         <button type="submit" class="primary" data-i18n="common.save">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="barcode-dlg">
+    <form method="dialog" id="barcode-form">
+      <h2 data-i18n="barcode.title">Add by barcode</h2>
+      <label><span data-i18n="barcode.code">Barcode (EAN / UPC)</span> <input name="code" inputmode="numeric" autocomplete="off" required></label>
+      <p class="hint" data-i18n="barcode.hint">Type it, use a USB barcode reader or take a photo of it. The name is looked up in UPCitemdb (free, 100 lookups a day) and then in your sources.</p>
+      <div id="barcode-camera" hidden><video playsinline muted></video></div>
+      <p id="barcode-status" class="hint" hidden></p>
+      <menu>
+        <button type="button" id="barcode-scan" hidden data-i18n="barcode.scan">📷 Scan</button>
+        <button type="button" id="barcode-photo" hidden data-i18n="barcode.photo">📷 Photo</button>
+        <input type="file" id="barcode-photo-input" accept="image/*" capture="environment" hidden>
+        <span class="spacer"></span>
+        <button type="button" id="barcode-cancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" id="barcode-continue" hidden></button>
+        <button type="submit" class="primary" id="barcode-search" data-i18n="barcode.search">Search</button>
       </menu>
     </form>
   </dialog>
