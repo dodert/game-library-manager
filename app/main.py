@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import unicodedata
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -52,6 +53,44 @@ SORT_FIELDS = {
     "rating": Game.rating,
     "item_type": Game.item_type,
 }
+
+def filter_games(stmt, q, platform_id, format, status, kind, item_type):
+    """The list filters shared by /api/games and /api/games/letters."""
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(
+            Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like), Game.tags.ilike(like),
+            Game.publisher.ilike(like), Game.developer.ilike(like), Game.series.ilike(like),
+        ))
+    if platform_id:
+        stmt = stmt.where(Game.platform_id == platform_id)
+    if format:
+        stmt = stmt.where(Game.format == format)
+    if status:
+        stmt = stmt.where(Game.status.in_(status))
+    if kind:
+        stmt = stmt.where(IS_HARDWARE if kind == "hardware" else ~IS_HARDWARE)
+    if item_type:
+        stmt = stmt.where(func.lower(func.trim(Game.item_type)) == item_type.strip().lower())
+    return stmt
+
+
+def sort_games(stmt, sort: str):
+    """The statement (joined to Platform when sorting by it) and its ORDER BY; games without a
+    value go last in either direction."""
+    key = sort.lstrip("-")
+    if key == "platform":
+        stmt = stmt.join(Platform, Game.platform_id == Platform.id)
+    column = SORT_FIELDS[key]
+    order = (column.desc() if sort.startswith("-") else column.asc()).nulls_last()
+    return stmt, (order, Game.id)
+
+
+def title_letter(title: str) -> str:
+    """A-Z for the first letter of a title (accents dropped: "Ábaco" -> A), "#" for anything else."""
+    first = unicodedata.normalize("NFKD", title.strip()[:1]).encode("ascii", "ignore").decode().upper()
+    return first if "A" <= first <= "Z" else "#"
+
 
 # Anything with a hardware type (Console, Amiibo, Funda...) is hardware; the rest are games
 IS_HARDWARE = func.coalesce(func.trim(Game.item_type), "") != ""
@@ -171,34 +210,33 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         offset: int = Query(0, ge=0),
         db: Session = Depends(get_db),
     ):
-        stmt = select(Game)
-        if q:
-            like = f"%{q}%"
-            stmt = stmt.where(or_(
-                Game.title.ilike(like), Game.barcode == q, Game.notes.ilike(like), Game.tags.ilike(like),
-                Game.publisher.ilike(like), Game.developer.ilike(like), Game.series.ilike(like),
-            ))
-        if platform_id:
-            stmt = stmt.where(Game.platform_id == platform_id)
-        if format:
-            stmt = stmt.where(Game.format == format)
-        if status:
-            stmt = stmt.where(Game.status.in_(status))
-        if kind:
-            stmt = stmt.where(IS_HARDWARE if kind == "hardware" else ~IS_HARDWARE)
-        if item_type:
-            stmt = stmt.where(func.lower(func.trim(Game.item_type)) == item_type.strip().lower())
+        stmt = filter_games(select(Game), q, platform_id, format, status, kind, item_type)
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-        key = sort.lstrip("-")
-        if key == "platform":
-            stmt = stmt.join(Platform, Game.platform_id == Platform.id)
-        column = SORT_FIELDS[key]
-        # Games without a value go last in either direction
-        order = (column.desc() if sort.startswith("-") else column.asc()).nulls_last()
+        stmt, order = sort_games(stmt, sort)
         games = db.scalars(
-            stmt.options(selectinload(Game.platform)).order_by(order, Game.id).limit(limit).offset(offset)
+            stmt.options(selectinload(Game.platform)).order_by(*order).limit(limit).offset(offset)
         ).all()
         return GamePage(total=total, items=[to_out(g) for g in games])
+
+    @app.get("/api/games/letters")
+    def game_letters(
+        q: str | None = None,
+        platform_id: int | None = None,
+        format: GameFormat | None = None,
+        status: list[GameStatus] = Query(default=[]),
+        kind: Literal["game", "hardware"] | None = None,
+        item_type: str | None = None,
+        sort: Literal["title", "-title"] = "title",
+        db: Session = Depends(get_db),
+    ):
+        """Position in the list of the first title starting with each letter ("#" for digits and
+        symbols), with the same filters and order as /api/games, to jump to a letter."""
+        stmt = filter_games(select(Game.title), q, platform_id, format, status, kind, item_type)
+        stmt, order = sort_games(stmt, sort)
+        letters: dict[str, int] = {}
+        for position, title in enumerate(db.scalars(stmt.order_by(*order))):
+            letters.setdefault(title_letter(title), position)
+        return letters
 
     @app.post("/api/barcode/scan")
     async def barcode_scan(file: UploadFile = File(...)):

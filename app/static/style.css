@@ -112,7 +112,7 @@ form input, form select, form textarea { width: 100%; min-width: 0; }
 form input[type=file] { width: auto; }
 .dlg-tabs { flex-wrap: nowrap; overflow-x: auto; }
 .dlg-tabs button { white-space: nowrap; padding: .4rem .7rem; }
-footer { padding: 1rem; text-align: center; font-size: .75rem; color: var(--muted); border-top: 1px solid var(--border); }
+footer { padding: .6rem 1rem; text-align: center; font-size: .75rem; color: var(--muted); border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--bg); z-index: 5; }
 footer a { color: inherit; }
 #scrape-bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin: 0 1rem .75rem; padding: .6rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: .85rem; }
 #scrape-bar .scrape-text { flex: 1 1 300px; }
@@ -125,3 +125,12 @@ form label.radio input { width: auto; }
 #lookup-providers { display: contents; }
 #scrape-form fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 .7rem; padding: .4rem .7rem .2rem; }
 #scrape-form legend { font-size: .8rem; color: var(--muted); padding: 0 .3rem; }
+
+/* A-Z jump bar, shown when the list is sorted by title */
+#letters { position: fixed; right: 2px; top: 50%; transform: translateY(-50%); z-index: 6; display: flex; flex-direction: column; height: min(36rem, calc(100dvh - 8rem)); touch-action: none; user-select: none; }
+#letters[hidden] { display: none; }
+#letters button { flex: 1 1 0; min-height: 0; border: 0; background: none; padding: 0 .35rem; font-size: .7rem; line-height: 1.2; font-weight: 600; color: var(--accent); }
+#letters button:disabled { color: var(--border); }
+#letters button.current { color: var(--surface); background: var(--accent); border-radius: 4px; }
+body.has-letters .grid, body.has-letters #pager { padding-right: 1.8rem; }
+table.games tbody tr, .grid > .card { scroll-margin-top: 2.6rem; }

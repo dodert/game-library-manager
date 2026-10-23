@@ -222,7 +222,12 @@ function setTab(name) {
   $("#grid").hidden = isStats;
   $("#pager").hidden = isStats;
   $("#stats-view").hidden = !isStats;
-  if (isStats) { $("#empty").hidden = true; loadStats(); } else loadGames();
+  if (isStats) {
+    $("#empty").hidden = true;
+    $("#letters").hidden = true;
+    document.body.classList.remove("has-letters");
+    loadStats();
+  } else loadGames();
 }
 
 const PAGE_SIZE = 60;
@@ -334,14 +339,14 @@ function renderPager() {
 
 // Fetches the next page and appends it. A filter change bumps list.gen, so a page that
 // arrives for an old filter is dropped instead of being mixed into the new list.
-async function loadMore() {
+async function loadMore(size = PAGE_SIZE) {
   if (list.loading || (list.loaded && list.loaded >= list.total)) return;
   const gen = list.gen;
   list.loading = true;
   renderPager();
   try {
     const params = listParams();
-    params.set("limit", PAGE_SIZE);
+    params.set("limit", size);
     params.set("offset", list.loaded);
     const page = await api(`/api/games?${params}`);
     if (gen !== list.gen) return;
@@ -367,6 +372,7 @@ async function loadGames(keep = false) {
   list.total = 0;
   list.loading = false;
   resetGrid();
+  loadLetters();
   await loadMore();
   while (list.loaded < Math.min(target, list.total) && !list.loading) {
     const before = list.loaded;
@@ -374,6 +380,62 @@ async function loadGames(keep = false) {
     if (list.loaded === before) break;
   }
 }
+
+// A-Z bar: where the first title of each letter is in the current list (title order only)
+const LETTERS = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
+let letterPositions = {};
+
+async function loadLetters() {
+  const sort = $("#sort").value;
+  const show = tab !== "stats" && (sort === "title" || sort === "-title");
+  const gen = list.gen;
+  letterPositions = {};
+  if (show) {
+    const params = listParams();
+    try { letterPositions = await api(`/api/games/letters?${params}`); } catch { letterPositions = {}; }
+    if (gen !== list.gen) return;
+  }
+  const nav = $("#letters");
+  nav.hidden = !show || !Object.keys(letterPositions).length;
+  document.body.classList.toggle("has-letters", !nav.hidden);
+  nav.innerHTML = LETTERS.map((l) =>
+    `<button type="button" data-letter="${l}"${l in letterPositions ? "" : " disabled"}>${l}</button>`).join("");
+}
+
+// Loads pages until the game at that position is in the list, then scrolls to it
+async function jumpTo(position) {
+  const gen = list.gen;
+  while (list.loaded <= position && list.loaded < list.total && gen === list.gen) {
+    while (list.loading) await new Promise((resolve) => setTimeout(resolve, 50));
+    if (gen !== list.gen) return;
+    await loadMore(500);
+  }
+  if (gen !== list.gen) return;
+  listTarget().children[position]?.scrollIntoView({ block: "start" });
+}
+
+let currentLetter = null;
+function pickLetter(button) {
+  const letter = button?.dataset.letter;
+  if (!letter || button.disabled || letter === currentLetter) return;
+  currentLetter = letter;
+  $("#letters").querySelectorAll("button").forEach((b) => b.classList.toggle("current", b === button));
+  jumpTo(letterPositions[letter]);
+}
+
+// Tap a letter, or slide a finger along the bar
+const letterAt = (ev) => document.elementFromPoint(ev.clientX, ev.clientY)?.closest("#letters button");
+$("#letters").addEventListener("pointerdown", (ev) => {
+  currentLetter = null;
+  $("#letters").setPointerCapture(ev.pointerId);
+  pickLetter(letterAt(ev));
+});
+$("#letters").addEventListener("pointermove", (ev) => {
+  if ($("#letters").hasPointerCapture(ev.pointerId)) pickLetter(letterAt(ev));
+});
+$("#letters").addEventListener("pointerup", () => {
+  setTimeout(() => $("#letters").querySelectorAll(".current").forEach((b) => b.classList.remove("current")), 600);
+});
 
 new IntersectionObserver((entries) => {
   if (entries.some((e) => e.isIntersecting) && tab !== "stats") loadMore();

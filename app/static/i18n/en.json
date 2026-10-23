@@ -89,6 +89,7 @@
   "list.pager": "Showing {loaded} of {total} · page {page} of {pages}",
   "list.loading": "Loading…",
   "list.more": "Load more",
+  "list.letters": "Jump to letter",
   "column.title": "Title",
   "column.platform": "Platform",
   "column.release_year": "Year",

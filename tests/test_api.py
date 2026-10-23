@@ -146,3 +146,21 @@ def test_favicon_and_touch_icon(client):
     html = client.get("/").text
     assert 'rel="icon"' in html and 'rel="apple-touch-icon"' in html and 'rel="manifest"' in html
     assert client.get("/static/icons/manifest.webmanifest").json()["icons"]
+
+
+def test_letters_jump_positions(client):
+    ps5, pc = platform_id(client), platform_id(client, "PC")
+    for title, platform in [("Zelda", ps5), ("Ábzû", pc), ("1080 Snowboarding", ps5), ("Alan Wake", ps5),
+                            ("Bayonetta", pc), ("Zoo Tycoon", pc)]:
+        client.post("/api/games", json={"title": title, "platform_id": platform, "format": "physical"}).raise_for_status()
+
+    titles = [g["title"] for g in client.get("/api/games", params={"sort": "title"}).json()["items"]]
+    letters = client.get("/api/games/letters", params={"sort": "title"}).json()
+    # Each letter points at the first game of the list that starts with it
+    assert letters == {"#": 0, "A": 1, "B": 2, "Z": 3}
+    assert titles[letters["Z"]] == "Zelda" and titles[letters["A"]] == "Alan Wake"
+
+    desc = client.get("/api/games/letters", params={"sort": "-title", "platform_id": pc}).json()
+    pc_titles = [g["title"] for g in client.get("/api/games", params={"sort": "-title", "platform_id": pc}).json()["items"]]
+    assert {k: pc_titles[v] for k, v in desc.items()} == {"Z": "Zoo Tycoon", "B": "Bayonetta", "A": "Ábzû"}
+    assert client.get("/api/games/letters", params={"sort": "-created_at"}).status_code == 422
