@@ -1,9 +1,14 @@
 """Barcode (EAN/UPC) lookup. None of the metadata providers search by barcode, so the product
 name comes from UPCitemdb's free plan (no key, 100 lookups a day per IP) and the providers are
 then searched by that name."""
+import io
 import re
 
 import httpx
+import zxingcpp
+from PIL import Image, ImageOps
+
+MAX_PHOTO_PIXELS = 50_000_000
 
 UPCITEMDB_URL = "https://api.upcitemdb.com/prod/trial/lookup"
 BARCODE_PATTERN = r"^\d{8,14}$"
@@ -20,6 +25,22 @@ PLATFORM_ALIASES = {
 _SUFFIX = re.compile(r"(?:\s+[-–—|]\s+|\s*[:,]\s*|\s*\()([^()|:,]+?)\)?\s*$")
 # Packaging words that don't help a title search
 _NOISE = re.compile(r"\b(video ?game|standard edition|pal|ntsc)\b", re.I)
+
+
+def read_barcode(photo: bytes) -> str | None:
+    """EAN/UPC in a photo, for phones that can't scan live (no HTTPS or no BarcodeDetector)."""
+    try:
+        image = Image.open(io.BytesIO(photo))
+        if image.width * image.height > MAX_PHOTO_PIXELS:
+            return None
+        image = ImageOps.exif_transpose(image).convert("L")
+    except (OSError, ValueError, Image.DecompressionBombError):
+        return None
+    image.thumbnail((2000, 2000))
+    for barcode in zxingcpp.read_barcodes(image, formats=zxingcpp.BarcodeFormat.EANUPC):
+        if valid_barcode(barcode.text):
+            return barcode.text
+    return None
 
 
 def valid_barcode(code: str) -> bool:

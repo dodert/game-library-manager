@@ -58,3 +58,26 @@ def test_barcode_unknown_error_and_invalid(tmp_path):
     assert res["error"] == "HTTP 429" and res["product"] is None
     assert client.get("/api/barcode/abc").status_code == 422
     assert client.get("/api/barcode/1234").status_code == 422
+
+
+def photo_of(code: str) -> bytes:
+    """A JPEG 'photo' of a box: the barcode scaled up, rotated and with a margin."""
+    import io
+
+    import zxingcpp
+    from PIL import Image
+
+    barcode = Image.fromarray(zxingcpp.create_barcode(code, zxingcpp.BarcodeFormat.EAN13).to_image(scale=4))
+    photo = Image.new("L", (barcode.width + 200, barcode.height + 300), 255)
+    photo.paste(barcode, (100, 150))
+    out = io.BytesIO()
+    photo.rotate(90, expand=True, fillcolor=255).convert("RGB").save(out, "JPEG", quality=85)
+    return out.getvalue()
+
+
+def test_barcode_from_photo(tmp_path):
+    client = make_client(tmp_path)
+    res = client.post("/api/barcode/scan", files={"file": ("box.jpg", photo_of("5030917285394"), "image/jpeg")})
+    assert res.json() == {"code": "5030917285394"}
+    blank = client.post("/api/barcode/scan", files={"file": ("x.jpg", b"not an image", "image/jpeg")})
+    assert blank.status_code == 422

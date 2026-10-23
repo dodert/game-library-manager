@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
-from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb
+from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
@@ -199,6 +199,17 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             stmt.options(selectinload(Game.platform)).order_by(order, Game.id).limit(limit).offset(offset)
         ).all()
         return GamePage(total=total, items=[to_out(g) for g in games])
+
+    @app.post("/api/barcode/scan")
+    async def barcode_scan(file: UploadFile = File(...)):
+        """Read the EAN/UPC from a photo of the box."""
+        photo = await file.read(MAX_IMAGE_BYTES + 1)
+        if len(photo) > MAX_IMAGE_BYTES:
+            raise HTTPException(413, "Photo too large (max 10 MB)")
+        code = await asyncio.to_thread(read_barcode, photo)
+        if not code:
+            raise HTTPException(422, "No barcode found in the photo")
+        return {"code": code}
 
     @app.get("/api/barcode/{code}", response_model=BarcodeOut)
     async def barcode_lookup(code: str = PathParam(pattern=BARCODE_PATTERN), db: Session = Depends(get_db)):

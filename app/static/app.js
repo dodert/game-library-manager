@@ -539,7 +539,8 @@ $("#add-btn").addEventListener("click", () => openDialog(null));
 // UPCitemdb, then the usual online search in the game dialog
 let barcodeResult = null;
 let barcodeStream = null;
-// The browser's barcode reader needs Chrome/Edge (Android, macOS...) and HTTPS
+// Live scanning needs the browser's barcode reader (Chrome/Edge) and HTTPS; anywhere else
+// (iPhone, or the app opened over plain http) a photo is taken and the server reads the code
 const canScan = "BarcodeDetector" in window && !!navigator.mediaDevices?.getUserMedia;
 
 function barcodeStatus(text, { error = false, action = "" } = {}) {
@@ -567,6 +568,7 @@ $("#barcode-btn").addEventListener("click", () => {
   barcodeResult = null;
   barcodeStatus("");
   $("#barcode-scan").hidden = !canScan;
+  $("#barcode-photo").hidden = canScan;
   $("#barcode-dlg").showModal();
 });
 $("#barcode-cancel").addEventListener("click", closeBarcode);
@@ -594,6 +596,23 @@ $("#barcode-scan").addEventListener("click", async () => {
   } catch (err) {
     stopScan();
     barcodeStatus(t("barcode.camera_error", { error: err.message }), { error: true });
+  }
+});
+
+$("#barcode-photo").addEventListener("click", () => $("#barcode-photo-input").click());
+$("#barcode-photo-input").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = "";
+  if (!file) return;
+  barcodeStatus(t("barcode.reading_photo"));
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const { code } = await api("/api/barcode/scan", { method: "POST", body });
+    $("#barcode-form").elements.code.value = code;
+    $("#barcode-form").requestSubmit();
+  } catch {
+    barcodeStatus(t("barcode.photo_failed"), { error: true });
   }
 });
 
