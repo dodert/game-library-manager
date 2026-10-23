@@ -37,6 +37,8 @@ Image: `ghcr.io/dodert/game-library-manager` (linux/amd64 and linux/arm64), buil
 
 To try a branch before merging it: **Actions → CI → Run workflow**, pick the branch. The image is pushed as `ghcr.io/dodert/game-library-manager:<branch>` (`/` becomes `-`, e.g. `feat-clz-extras`), and also as `pre-release` and a SemVer pre-release version `X.Y.Z-<branch>.<run>` (e.g. `0.5.0-feat-bulk-scrape.27`) when the branch is not `main`; pre-releases sort below the release and never take a `main` number; set that tag as the container's Repository in Unraid. **Actions → Sync Unraid template → Run workflow** does the same for the template, publishing that branch's XML.
 
+To delete old image versions: **Actions → Clean up old images → Run workflow**. It deletes versions older than the cut-off (default 4 weeks) that are not among the most recent tagged ones (default 10), plus old untagged leftovers; the amd64/arm64 images inside a kept tag are protected. It runs as a dry run (only lists what it would delete) unless you untick *dry-run*. It needs the repository to have the Admin role in the package's *Manage Actions access*.
+
 ```bash
 docker run -d --name game-library-manager -p 8000:8000 \
   -v /path/to/data:/data -e PUID=1000 -e PGID=1000 \
