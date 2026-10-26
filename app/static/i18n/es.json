@@ -1,7 +1,7 @@
 {
   "_name": "Español",
   "header.title": "🎮 Mi biblioteca",
-  "header.import_csv": "Importar CSV",
+  "header.import_csv": "Importar de CLZ",
   "header.export_csv": "Exportar CSV",
   "header.import_steam": "Importar Steam",
   "header.scrape": "Buscar carátulas",
@@ -26,7 +26,7 @@
   "settings.test_library": "Biblioteca de Steam: {n} juegos",
   "settings.test_error": "Error: {error}",
   "settings.test_not_configured": "Sin configurar: añade sus claves en los ajustes del contenedor",
-  "import.title": "Importar CSV",
+  "import.title": "Importar de CLZ (CSV)",
   "import.file": "Archivo",
   "import.delimiter": "Separador",
   "import.semicolon": "Punto y coma ( ; ) — CLZ",
@@ -229,5 +229,7 @@
   "totp.setup_help": "Añade esta cuenta a tu app de autenticación: escanea el QR o escribe el código de abajo. Después introduce el código de 6 dígitos que te muestre.",
   "totp.code": "Código de un solo uso",
   "totp.error": "Código incorrecto o caducado.",
-  "totp.back": "Volver"
+  "totp.back": "Volver",
+  "import.clz_hint": "Exporta tu colección desde CLZ Games (clz.com) en CSV y elige aquí ese archivo. También sirve un CSV exportado desde esta app.",
+  "header.data_menu": "⇅ Importar / exportar"
 }

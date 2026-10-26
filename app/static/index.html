@@ -18,9 +18,14 @@
   <header>
     <h1 data-i18n="header.title">🎮 My library</h1>
     <div id="stats"></div>
-    <button id="csv-import-btn" data-i18n="header.import_csv">Import CSV</button>
-    <a id="csv-export-btn" class="button" href="/api/export/csv" download data-i18n="header.export_csv">Export CSV</a>
-    <button id="steam-import-btn" hidden data-i18n="header.import_steam">Import Steam</button>
+    <details class="menu" id="data-menu">
+      <summary class="button" data-i18n="header.data_menu">Import / export</summary>
+      <div class="menu-items">
+        <button id="csv-import-btn" data-i18n="header.import_csv">Import from CLZ</button>
+        <button id="steam-import-btn" hidden data-i18n="header.import_steam">Import Steam</button>
+        <a id="csv-export-btn" class="button" href="/api/export/csv" download data-i18n="header.export_csv">Export CSV</a>
+      </div>
+    </details>
     <button id="scrape-btn" data-i18n="header.scrape">Find covers</button>
     <button id="reset-btn" class="danger" data-i18n="header.reset">Delete all</button>
     <button id="settings-btn" data-i18n-title="settings.title" data-i18n-aria-label="settings.title" title="Settings" aria-label="Settings">⚙</button>
@@ -74,7 +79,8 @@
 
   <dialog id="import-dlg">
     <form method="dialog" id="import-form">
-      <h2 data-i18n="import.title">Import CSV</h2>
+      <h2 data-i18n="import.title">Import from CLZ (CSV)</h2>
+      <p class="hint" data-i18n="import.clz_hint">Export your collection from CLZ Games (clz.com) as CSV and pick that file here. A CSV exported from this app also works.</p>
       <label><span data-i18n="import.file">File</span> <input name="file" type="file" accept=".csv,.txt,text/csv" required></label>
       <div class="row">
         <label><span data-i18n="import.delimiter">Separator</span>

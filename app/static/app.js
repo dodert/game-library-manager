@@ -914,3 +914,8 @@ initI18n().finally(() => {
   loadAbout();
   api("/api/scrape").then((st) => { if (st.running) pollScrape(); });
 });
+
+// Import / export menu: closes after picking an option, or on a click elsewhere
+const dataMenu = $("#data-menu");
+dataMenu.addEventListener("click", (ev) => { if (ev.target.closest(".menu-items button, .menu-items a")) dataMenu.open = false; });
+document.addEventListener("click", (ev) => { if (!dataMenu.contains(ev.target)) dataMenu.open = false; });
