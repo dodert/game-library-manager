@@ -43,7 +43,8 @@ class Totp:
             try:
                 return json.loads(self.path.read_text())
             except ValueError:
-                pass
+                # Never replace it silently: a new, unconfirmed secret would be shown to anyone with the password
+                raise ValueError(f"{self.path} is damaged; delete it to set up the one-time code again") from None
         data = {"secret": base64.b32encode(secrets.token_bytes(20)).decode(), "confirmed": False}
         self._save(data)
         return data

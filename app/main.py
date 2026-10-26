@@ -593,11 +593,13 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         response.delete_cookie(PENDING_COOKIE)
         return response
 
-    async def failed(location: str) -> RedirectResponse:
-        # One wrong password or code per second for the whole app: parallel requests wait in line,
+    wrong_codes = 0  # wrong one-time codes in a row, for the whole app
+
+    async def failed(location: str, delay: float = 1) -> RedirectResponse:
+        # One wrong password or code at a time for the whole app: parallel requests wait in line,
         # so guessing can't be sped up by sending many at once
         async with failed_login_lock:
-            await asyncio.sleep(1)
+            await asyncio.sleep(delay)
         return RedirectResponse(location, status_code=303)
 
     @app.get("/login", include_in_schema=False)
@@ -634,10 +636,15 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     @app.post("/login/totp", include_in_schema=False)
     async def totp_login(request: Request, code: str = Form("")):
+        nonlocal wrong_codes
         if not totp or not auth.valid_pending(request.cookies.get(PENDING_COOKIE)):
             return RedirectResponse("/login", status_code=303)
         if not totp.verify(code):
-            return await failed("/login/totp?error=1")
+            # 1 s for the first few, then doubling up to a minute: with the password known, guessing
+            # the code would otherwise take days; this way it takes years. A right code resets it.
+            wrong_codes += 1
+            return await failed("/login/totp?error=1", min(60, 2 ** max(0, wrong_codes - 5)))
+        wrong_codes = 0
         if not totp.confirmed:
             totp.confirm()
         return logged_in(request)

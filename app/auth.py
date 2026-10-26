@@ -88,16 +88,21 @@ class Auth:
             return False
         return hmac.compare_digest(signature, self._sign(expires, nonce)) and signature not in self._revoked
 
+    def _sign_pending(self, expires: str) -> str:
+        # Its own key, so a pending cookie can never be reshaped into a valid session cookie
+        key = hmac.new(self._key, b"pending-cookie", hashlib.sha256).digest()
+        return hmac.new(key, f"{self.username}|{expires}".encode(), hashlib.sha256).hexdigest()
+
     def new_pending(self) -> str:
         """Short-lived proof that the password was right, while the one-time code is asked."""
         expires = str(int(time.time()) + PENDING_SECONDS)
-        return f"{expires}.{self._sign(expires, 'pending')}"
+        return f"{expires}.{self._sign_pending(expires)}"
 
     def valid_pending(self, token: str | None) -> bool:
         expires, _, signature = (token or "").partition(".")
         if not (expires.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
             return False
-        return hmac.compare_digest(signature.encode(), self._sign(expires, "pending").encode())
+        return hmac.compare_digest(signature.encode(), self._sign_pending(expires).encode())
 
     @staticmethod
     def is_public(path: str) -> bool:

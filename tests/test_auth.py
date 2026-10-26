@@ -136,3 +136,19 @@ def test_totp_secret_survives_restart(tmp_path):
     secret = (tmp_path / ".totp_secret").read_text()
     totp_client(tmp_path)
     assert (tmp_path / ".totp_secret").read_text() == secret
+
+
+def test_pending_cookie_cannot_be_turned_into_a_session(tmp_path):
+    client = totp_client(tmp_path)
+    client.post("/login", data={"username": "admin", "password": "s3cret"}, follow_redirects=False)
+    expires, signature = client.cookies["glm_pending"].split(".")
+    client.cookies.clear()
+    client.cookies.set("glm_session", f"{expires}.pending.{signature}")
+    assert client.get("/api/games").status_code == 401
+
+
+def test_damaged_totp_secret_stops_the_app_instead_of_showing_a_new_one(tmp_path):
+    totp_client(tmp_path)
+    (tmp_path / ".totp_secret").write_text("{not json")
+    with pytest.raises(ValueError, match="damaged"):
+        totp_client(tmp_path)
