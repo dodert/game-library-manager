@@ -24,4 +24,5 @@ services:
       - SCREENSCRAPER_PASSWORD=
       - AUTH_USERNAME=
       - AUTH_PASSWORD=
+      - AUTH_TOTP=false
     restart: unless-stopped

@@ -32,4 +32,5 @@
   <Config Name="ScreenScraper password" Target="SCREENSCRAPER_PASSWORD" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Login user" Target="AUTH_USERNAME" Default="" Mode="" Description="User for the login screen. Set it together with the password; leave both empty for no login" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Login password" Target="AUTH_PASSWORD" Default="" Mode="" Description="Password for the login screen. Changing it logs everyone out" Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Login one-time code (OTP)" Target="AUTH_TOTP" Default="false" Mode="" Description="true = also ask for a code from an authenticator app. The first login shows a QR code to add it; to show a new one, delete .totp_secret in the Data folder" Type="Variable" Display="always" Required="false" Mask="false">false</Config>
 </Container>
