@@ -30,4 +30,6 @@
   <Config Name="ScreenScraper dev password" Target="SCREENSCRAPER_DEV_PASSWORD" Default="" Mode="" Description="ScreenScraper developer credentials" Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="ScreenScraper user" Target="SCREENSCRAPER_USER" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="ScreenScraper password" Target="SCREENSCRAPER_PASSWORD" Default="" Mode="" Description="Your screenscraper.fr account" Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Login user" Target="AUTH_USERNAME" Default="" Mode="" Description="User for the login screen. Set it together with the password; leave both empty for no login" Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="Login password" Target="AUTH_PASSWORD" Default="" Mode="" Description="Password for the login screen. Changing it logs everyone out" Type="Variable" Display="always" Required="false" Mask="true"/>
 </Container>

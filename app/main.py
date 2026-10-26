@@ -10,13 +10,14 @@ from typing import Literal
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi import Path as PathParam
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
+from .auth import COOKIE, SESSION_SECONDS, Auth
 from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
@@ -98,6 +99,7 @@ SORT_PATTERN = f"^-?({'|'.join(SORT_FIELDS)})$"
 
 
 def create_app(settings: Settings = default_settings, http_client: httpx.AsyncClient | None = None) -> FastAPI:
+    auth = Auth(settings.auth_username, settings.auth_password, settings.data_dir)
     engine = make_engine(settings.resolved_database_url)
     SessionLocal = make_sessionmaker(engine)
     upgrade_database(engine)
@@ -138,6 +140,14 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             return Response("Cross-site request blocked", status_code=403)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        if not auth.enabled or auth.is_public(request.url.path) or auth.valid_session(request.cookies.get(COOKIE)):
+            return await call_next(request)
+        if request.url.path.startswith("/api/"):
+            return JSONResponse({"detail": "Login required"}, status_code=401)
+        return RedirectResponse("/login", status_code=303)
+
     def get_db():
         with SessionLocal() as db:
             yield db
@@ -171,6 +181,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
             "build_date": settings.build_date or None,
             "database": engine.dialect.name,
             "schema": db.scalar(text("SELECT version_num FROM alembic_version")),
+            "auth": auth.enabled,
         }
 
     @app.get("/api/languages")
@@ -563,6 +574,40 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     @app.get("/apple-touch-icon.png", include_in_schema=False)
     def apple_touch_icon():
         return FileResponse(STATIC_DIR / "icons" / "apple-touch-icon.png", media_type="image/png")
+
+    failed_login_lock = asyncio.Lock()
+    login_html = (STATIC_DIR / "login.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
+
+    @app.get("/login", include_in_schema=False)
+    def login_page(request: Request):
+        if not auth.enabled or auth.valid_session(request.cookies.get(COOKIE)):
+            return RedirectResponse("/", status_code=303)
+        return HTMLResponse(login_html, headers={"Cache-Control": "no-cache"})
+
+    @app.post("/login", include_in_schema=False)
+    async def login(request: Request, username: str = Form(""), password: str = Form("")):
+        if not auth.enabled:
+            return RedirectResponse("/", status_code=303)
+        if not auth.check_credentials(username, password):
+            # One wrong password per second for the whole app: parallel requests wait in line,
+            # so guessing can't be sped up by sending many at once
+            async with failed_login_lock:
+                await asyncio.sleep(1)
+            return RedirectResponse("/login?error=1", status_code=303)
+        response = RedirectResponse("/", status_code=303)
+        response.set_cookie(
+            COOKIE, auth.new_session(), max_age=SESSION_SECONDS, httponly=True, samesite="lax",
+            secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https",
+        )
+        return response
+
+    # POST only, so another website can't log you out with a link or an image
+    @app.post("/logout", include_in_schema=False)
+    def logout(request: Request):
+        auth.revoke(request.cookies.get(COOKIE))
+        response = RedirectResponse("/login" if auth.enabled else "/", status_code=303)
+        response.delete_cookie(COOKIE)
+        return response
 
     @app.get("/", include_in_schema=False)
     def index():

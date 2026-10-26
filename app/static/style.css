@@ -134,3 +134,10 @@ form label.radio input { width: auto; }
 #letters button.current { color: var(--surface); background: var(--accent); border-radius: 4px; }
 body.has-letters .grid, body.has-letters #pager { padding-right: 1.8rem; }
 table.games tbody tr, .grid > .card { scroll-margin-top: 2.6rem; }
+
+/* Login */
+.login-page { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.login-box { width: min(100%, 22rem); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; }
+.login-box h1 { margin: 0 0 1rem; font-size: 1.4rem; text-align: center; }
+.login-box button { margin-top: .4rem; }
+.login-error { color: var(--danger); font-size: .85rem; margin: 0 0 .4rem; }

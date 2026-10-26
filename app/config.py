@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     screenscraper_user: str = ""
     screenscraper_password: str = ""
 
+    # Login: set both to ask for this user and password; leave both empty for no login
+    auth_username: str = ""
+    auth_password: str = ""
+
     @property
     def resolved_database_url(self) -> str:
         if self.database_url:
