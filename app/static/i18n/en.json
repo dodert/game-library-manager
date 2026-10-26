@@ -225,5 +225,9 @@
   "login.username": "User",
   "login.password": "Password",
   "login.error": "Wrong user or password.",
-  "login.submit": "Log in"
+  "login.submit": "Log in",
+  "totp.setup_help": "Add this account to your authenticator app: scan the QR code, or type the code below. Then enter the 6-digit code it shows.",
+  "totp.code": "One-time code",
+  "totp.error": "Wrong or expired code.",
+  "totp.back": "Back"
 }

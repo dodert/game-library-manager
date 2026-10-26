@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
-from .auth import COOKIE, SESSION_SECONDS, Auth
+from .auth import COOKIE, PENDING_COOKIE, PENDING_SECONDS, SESSION_SECONDS, Auth
 from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
@@ -32,6 +32,7 @@ from .schemas import (
     ProviderOut, ProviderTestOut, ResetIn, ResetOut, ScrapeIn, ScrapeStatusOut, SteamImportOut,
 )
 from .scraper import Scraper, cover_options
+from .totp import Totp
 from .seed import DEFAULT_PLATFORMS, seed_platforms
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -100,6 +101,9 @@ SORT_PATTERN = f"^-?({'|'.join(SORT_FIELDS)})$"
 
 def create_app(settings: Settings = default_settings, http_client: httpx.AsyncClient | None = None) -> FastAPI:
     auth = Auth(settings.auth_username, settings.auth_password, settings.data_dir)
+    if settings.auth_totp and not auth.enabled:
+        raise ValueError("AUTH_TOTP needs AUTH_USERNAME and AUTH_PASSWORD")
+    totp = Totp(settings.data_dir) if settings.auth_totp else None
     engine = make_engine(settings.resolved_database_url)
     SessionLocal = make_sessionmaker(engine)
     upgrade_database(engine)
@@ -577,6 +581,24 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     failed_login_lock = asyncio.Lock()
     login_html = (STATIC_DIR / "login.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
+    totp_html = (STATIC_DIR / "totp.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
+
+    def is_https(request: Request) -> bool:
+        return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+
+    def logged_in(request: Request) -> RedirectResponse:
+        response = RedirectResponse("/", status_code=303)
+        response.set_cookie(COOKIE, auth.new_session(), max_age=SESSION_SECONDS, httponly=True, samesite="lax",
+                            secure=is_https(request))
+        response.delete_cookie(PENDING_COOKIE)
+        return response
+
+    async def failed(location: str) -> RedirectResponse:
+        # One wrong password or code per second for the whole app: parallel requests wait in line,
+        # so guessing can't be sped up by sending many at once
+        async with failed_login_lock:
+            await asyncio.sleep(1)
+        return RedirectResponse(location, status_code=303)
 
     @app.get("/login", include_in_schema=False)
     def login_page(request: Request):
@@ -589,17 +611,36 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         if not auth.enabled:
             return RedirectResponse("/", status_code=303)
         if not auth.check_credentials(username, password):
-            # One wrong password per second for the whole app: parallel requests wait in line,
-            # so guessing can't be sped up by sending many at once
-            async with failed_login_lock:
-                await asyncio.sleep(1)
-            return RedirectResponse("/login?error=1", status_code=303)
-        response = RedirectResponse("/", status_code=303)
-        response.set_cookie(
-            COOKIE, auth.new_session(), max_age=SESSION_SECONDS, httponly=True, samesite="lax",
-            secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https",
-        )
+            return await failed("/login?error=1")
+        if not totp:
+            return logged_in(request)
+        # Password right: now the one-time code (or adding the secret to the app, the first time)
+        response = RedirectResponse("/login/totp", status_code=303)
+        response.set_cookie(PENDING_COOKIE, auth.new_pending(), max_age=PENDING_SECONDS, httponly=True,
+                            samesite="lax", secure=is_https(request))
         return response
+
+    @app.get("/login/totp", include_in_schema=False)
+    def totp_page(request: Request):
+        if not totp or not auth.valid_pending(request.cookies.get(PENDING_COOKIE)):
+            return RedirectResponse("/login", status_code=303)
+        # The secret is shown only until a first code proves it's in the authenticator app
+        setup = "" if totp.confirmed else (
+            f'<div class="totp-qr">{totp.qr_svg(auth.username)}</div>'
+            f'<code class="totp-secret">{" ".join(totp.secret[i:i + 4] for i in range(0, len(totp.secret), 4))}</code>'
+        )
+        html = totp_html.replace("{{SETUP}}", setup).replace("{{MODE}}", "verify" if totp.confirmed else "setup")
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+    @app.post("/login/totp", include_in_schema=False)
+    async def totp_login(request: Request, code: str = Form("")):
+        if not totp or not auth.valid_pending(request.cookies.get(PENDING_COOKIE)):
+            return RedirectResponse("/login", status_code=303)
+        if not totp.verify(code):
+            return await failed("/login/totp?error=1")
+        if not totp.confirmed:
+            totp.confirm()
+        return logged_in(request)
 
     # POST only, so another website can't log you out with a link or an image
     @app.post("/logout", include_in_schema=False)

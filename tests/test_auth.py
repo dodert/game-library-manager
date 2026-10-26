@@ -84,3 +84,55 @@ def test_forged_cookie_with_huge_expiry_is_rejected_not_a_crash(tmp_path):
     client = TestClient(create_app(Settings(data_dir=tmp_path, auth_username="admin", auth_password="pw")))
     for forged in ("9" * 5000).encode() + b".00.abc", b"9999999999.00.d\xe9adbeef":
         assert client.get("/api/games", headers={"cookie": b"glm_session=" + forged}).status_code == 401
+
+
+def totp_client(tmp_path):
+    return make_client(tmp_path, auth_username="admin", auth_password="s3cret", auth_totp=True)
+
+
+def current_code(tmp_path, offset=0):
+    import json
+    import time
+
+    from app.totp import code_at
+    secret = json.loads((tmp_path / ".totp_secret").read_text())["secret"]
+    return code_at(secret, int(time.time() // 30) + offset)
+
+
+def test_totp_setup_then_code_required(tmp_path):
+    client = totp_client(tmp_path)
+    # Without the password first, the code page sends back to the login
+    assert client.get("/login/totp", follow_redirects=False).headers["location"] == "/login"
+    res = client.post("/login", data={"username": "admin", "password": "s3cret"}, follow_redirects=False)
+    assert res.headers["location"] == "/login/totp" and "glm_session" not in res.cookies
+    assert client.get("/api/games").status_code == 401  # password alone isn't enough
+
+    page = client.get("/login/totp").text
+    assert "<svg" in page and 'data-mode="setup"' in page
+    bad = client.post("/login/totp", data={"code": "000000"}, follow_redirects=False)
+    assert bad.headers["location"] == "/login/totp?error=1"
+    ok = client.post("/login/totp", data={"code": current_code(tmp_path)}, follow_redirects=False)
+    assert ok.headers["location"] == "/" and client.get("/api/games").status_code == 200
+
+    # Registered: the secret is no longer shown, only the code is asked
+    client.post("/logout")
+    client.post("/login", data={"username": "admin", "password": "s3cret"})
+    page = client.get("/login/totp").text
+    assert "<svg" not in page and 'data-mode="verify"' in page
+    # The code already used can't be used again
+    reused = client.post("/login/totp", data={"code": current_code(tmp_path)}, follow_redirects=False)
+    assert reused.headers["location"] == "/login/totp?error=1"
+    later = client.post("/login/totp", data={"code": current_code(tmp_path, 1)}, follow_redirects=False)
+    assert later.headers["location"] == "/"
+
+
+def test_totp_needs_login(tmp_path):
+    with pytest.raises(ValueError, match="AUTH_TOTP"):
+        make_client(tmp_path, auth_totp=True)
+
+
+def test_totp_secret_survives_restart(tmp_path):
+    totp_client(tmp_path)
+    secret = (tmp_path / ".totp_secret").read_text()
+    totp_client(tmp_path)
+    assert (tmp_path / ".totp_secret").read_text() == secret

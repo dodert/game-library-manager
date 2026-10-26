@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,14 @@ class Settings(BaseSettings):
     # Login: set both to ask for this user and password; leave both empty for no login
     auth_username: str = ""
     auth_password: str = ""
+    # Also ask for a one-time code from an authenticator app (needs the user and password above)
+    auth_totp: bool = False
+
+    @field_validator("auth_totp", mode="before")
+    @classmethod
+    def _empty_is_false(cls, value):
+        # An empty field in the Unraid template or docker-compose means "off"
+        return False if isinstance(value, str) and not value.strip() else value
 
     @property
     def resolved_database_url(self) -> str:

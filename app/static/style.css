@@ -141,3 +141,8 @@ table.games tbody tr, .grid > .card { scroll-margin-top: 2.6rem; }
 .login-box h1 { margin: 0 0 1rem; font-size: 1.4rem; text-align: center; }
 .login-box button { margin-top: .4rem; }
 .login-error { color: var(--danger); font-size: .85rem; margin: 0 0 .4rem; }
+.totp-help { font-size: .85rem; color: var(--muted); margin: 0 0 .8rem; }
+.totp-qr { background: #fff; border-radius: 8px; padding: .5rem; width: 200px; margin: 0 auto .6rem; }
+.totp-qr svg { display: block; width: 100%; height: auto; }
+.totp-secret { display: block; text-align: center; font-size: .95rem; letter-spacing: .05em; margin-bottom: 1rem; user-select: all; overflow-wrap: anywhere; }
+.totp-back { text-align: center; margin-top: .8rem; font-size: .85rem; color: var(--muted); }

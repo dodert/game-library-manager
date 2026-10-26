@@ -96,8 +96,11 @@ DATA_DIR=./data uvicorn app.main:create_app --factory --reload
 | Variable | Default | Description |
 |---|---|---|
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | *(empty)* | Set both to show a login screen; leave both empty for no login (setting only one stops the app with an error). There's no user management: it's that one user. |
+| `AUTH_TOTP` | `false` | `true` also asks for a one-time code from an authenticator app (Google Authenticator, Aegis, 1Password…). Needs the user and password. |
 
 After logging in the browser keeps the session for 30 days (signed, HttpOnly cookie); **Log out** in the header ends that session for good (even a copied cookie stops working; other devices stay logged in), and changing `AUTH_PASSWORD` logs every browser out. The Docker health check (`/api/health`) stays reachable without logging in. Wrong passwords are answered one per second for the whole app, so guessing can't be sped up with parallel requests. For access from outside your network, put it behind HTTPS (a reverse proxy) so the password isn't sent in clear.
+
+With `AUTH_TOTP=true`, after the password the app asks for the 6-digit code. The first time it shows a QR code and the secret as text: scan it (or type it) in your authenticator app and enter the code it shows; from then on only the code is asked. Each code works once. The secret is kept in `DATA_DIR/.totp_secret`; delete that file to register a new phone (the next login shows a new QR code). Turning `AUTH_TOTP` off and on again keeps the same secret.
 
 ### Metadata and cover providers
 

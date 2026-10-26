@@ -12,9 +12,12 @@ import time
 from pathlib import Path
 
 COOKIE = "glm_session"
+# Password checked, one-time code still to enter (only with AUTH_TOTP)
+PENDING_COOKIE = "glm_pending"
+PENDING_SECONDS = 5 * 60
 SESSION_SECONDS = 30 * 24 * 3600
 # Reachable without logging in: the login page itself, its assets, icons and the Docker health check
-PUBLIC_PATHS = {"/login", "/logout", "/favicon.ico", "/apple-touch-icon.png", "/api/health"}
+PUBLIC_PATHS = {"/login", "/login/totp", "/logout", "/favicon.ico", "/apple-touch-icon.png", "/api/health"}
 PUBLIC_PREFIXES = ("/static/",)
 
 
@@ -84,6 +87,17 @@ class Auth:
         if not (token.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
             return False
         return hmac.compare_digest(signature, self._sign(expires, nonce)) and signature not in self._revoked
+
+    def new_pending(self) -> str:
+        """Short-lived proof that the password was right, while the one-time code is asked."""
+        expires = str(int(time.time()) + PENDING_SECONDS)
+        return f"{expires}.{self._sign(expires, 'pending')}"
+
+    def valid_pending(self, token: str | None) -> bool:
+        expires, _, signature = (token or "").partition(".")
+        if not (expires.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
+            return False
+        return hmac.compare_digest(signature.encode(), self._sign(expires, "pending").encode())
 
     @staticmethod
     def is_public(path: str) -> bool:
