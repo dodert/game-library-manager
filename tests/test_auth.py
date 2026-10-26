@@ -59,3 +59,9 @@ def test_session_survives_restart_but_not_password_change(tmp_path):
     forged = make_client(tmp_path, auth_username="admin", auth_password="s3cret")
     forged.cookies.set("glm_session", "9999999999.deadbeef")
     assert forged.get("/api/games").status_code == 401
+
+
+def test_forged_cookie_with_huge_expiry_is_rejected_not_a_crash(tmp_path):
+    client = TestClient(create_app(Settings(data_dir=tmp_path, auth_username="admin", auth_password="pw")))
+    client.cookies.set("glm_session", "9" * 5000 + ".abc")
+    assert client.get("/api/games").status_code == 401

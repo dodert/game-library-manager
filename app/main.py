@@ -575,6 +575,7 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     def apple_touch_icon():
         return FileResponse(STATIC_DIR / "icons" / "apple-touch-icon.png", media_type="image/png")
 
+    failed_login_lock = asyncio.Lock()
     login_html = (STATIC_DIR / "login.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
 
     @app.get("/login", include_in_schema=False)
@@ -588,7 +589,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         if not auth.enabled:
             return RedirectResponse("/", status_code=303)
         if not auth.check_credentials(username, password):
-            await asyncio.sleep(1)  # slows down password guessing
+            # One wrong password per second for the whole app: parallel requests wait in line,
+            # so guessing can't be sped up by sending many at once
+            async with failed_login_lock:
+                await asyncio.sleep(1)
             return RedirectResponse("/login?error=1", status_code=303)
         response = RedirectResponse("/", status_code=303)
         response.set_cookie(

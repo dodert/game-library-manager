@@ -36,8 +36,11 @@ class Auth:
         return path.read_text().strip().encode()
 
     def check_credentials(self, username: str, password: str) -> bool:
-        user_ok = hmac.compare_digest(username.encode(), self.username.encode())
-        pass_ok = hmac.compare_digest(password.encode(), self.password.encode())
+        # Compare hashes so the time taken doesn't reveal the length of the real values
+        def same(a: str, b: str) -> bool:
+            return hmac.compare_digest(hashlib.sha256(a.encode()).digest(), hashlib.sha256(b.encode()).digest())
+        user_ok = same(username, self.username)
+        pass_ok = same(password, self.password)
         return self.enabled and user_ok and pass_ok
 
     def _sign(self, expires: int) -> str:
@@ -51,7 +54,8 @@ class Auth:
         if not token or "." not in token:
             return False
         expires, signature = token.split(".", 1)
-        if not expires.isdigit() or int(expires) < time.time():
+        # A forged cookie must not crash the request: ASCII digits only, and no absurd lengths
+        if not (expires.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
             return False
         return hmac.compare_digest(signature, self._sign(int(expires)))
 
