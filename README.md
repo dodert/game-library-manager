@@ -91,6 +91,14 @@ DATA_DIR=./data uvicorn app.main:create_app --factory --reload
 | `DATA_DIR` | `/data` | Database (SQLite), covers and other data |
 | `DATABASE_URL` | *(empty)* | Leave empty for SQLite in `DATA_DIR/library.db`. For PostgreSQL: `postgresql+psycopg://user:pass@host:5432/games` |
 
+### Login
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | *(empty)* | Set both to show a login screen; leave both empty for no login (setting only one stops the app with an error). There's no user management: it's that one user. |
+
+After logging in the browser keeps the session for 30 days (signed, HttpOnly cookie); **Log out** in the header ends it, and changing `AUTH_PASSWORD` logs every browser out. The Docker health check (`/api/health`) stays reachable without logging in. For access from outside your network, put it behind HTTPS (a reverse proxy) so the password isn't sent in clear.
+
 ### Metadata and cover providers
 
 Each provider turns on when its variables are set. Steam store search works without a key.

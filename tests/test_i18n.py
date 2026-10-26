@@ -42,7 +42,7 @@ def test_locale_has_every_english_key(path):
 
 
 def test_every_key_used_by_the_page_exists():
-    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    html = "".join((STATIC / name).read_text(encoding="utf-8") for name in ("index.html", "login.html"))
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     used = set(re.findall(r'data-i18n(?:-[a-z-]+)?="([^"]+)"', html))
     used |= set(re.findall(r'(?<![\w.])t\("([a-z_.]+)"', js))

@@ -220,5 +220,10 @@
   "barcode.lookup_error": "Couldn't look the code up ({error}); type the title yourself.",
   "barcode.add_anyway": "Add anyway",
   "barcode.add_manually": "Continue",
-  "barcode.camera_error": "Camera not available: {error}"
+  "barcode.camera_error": "Camera not available: {error}",
+  "header.logout": "Log out",
+  "login.username": "User",
+  "login.password": "Password",
+  "login.error": "Wrong user or password.",
+  "login.submit": "Log in"
 }

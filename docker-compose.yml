@@ -22,4 +22,6 @@ services:
       - SCREENSCRAPER_DEV_PASSWORD=
       - SCREENSCRAPER_USER=
       - SCREENSCRAPER_PASSWORD=
+      - AUTH_USERNAME=
+      - AUTH_PASSWORD=
     restart: unless-stopped

@@ -3,6 +3,7 @@ const SKIP_FIELDS = new Set(["cover", "id"]);
 
 const api = async (path, opts = {}) => {
   const res = await fetch(path, opts);
+  if (res.status === 401) location.href = "/login";  // session expired
   if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
   return res.status === 204 ? null : res.json();
 };
@@ -835,6 +836,7 @@ $("#reset-btn").addEventListener("click", async () => {
 
 async function loadAbout() {
   const a = await api("/api/about");
+  $("#logout-btn").hidden = !a.auth;
   const commit = a.commit
     ? ` · <a href="https://github.com/dodert/game-library-manager/commit/${esc(a.commit)}" target="_blank" rel="noopener">${esc(a.commit.slice(0, 7))}</a>`
     : "";
