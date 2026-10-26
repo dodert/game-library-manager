@@ -601,8 +601,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         )
         return response
 
-    @app.get("/logout", include_in_schema=False)
-    def logout():
+    # POST only, so another website can't log you out with a link or an image
+    @app.post("/logout", include_in_schema=False)
+    def logout(request: Request):
+        auth.revoke(request.cookies.get(COOKIE))
         response = RedirectResponse("/login" if auth.enabled else "/", status_code=303)
         response.delete_cookie(COOKIE)
         return response

@@ -97,7 +97,7 @@ DATA_DIR=./data uvicorn app.main:create_app --factory --reload
 |---|---|---|
 | `AUTH_USERNAME` / `AUTH_PASSWORD` | *(empty)* | Set both to show a login screen; leave both empty for no login (setting only one stops the app with an error). There's no user management: it's that one user. |
 
-After logging in the browser keeps the session for 30 days (signed, HttpOnly cookie); **Log out** in the header ends it, and changing `AUTH_PASSWORD` logs every browser out. The Docker health check (`/api/health`) stays reachable without logging in. For access from outside your network, put it behind HTTPS (a reverse proxy) so the password isn't sent in clear.
+After logging in the browser keeps the session for 30 days (signed, HttpOnly cookie); **Log out** in the header ends that session for good (even a copied cookie stops working; other devices stay logged in), and changing `AUTH_PASSWORD` logs every browser out. The Docker health check (`/api/health`) stays reachable without logging in. Wrong passwords are answered one per second for the whole app, so guessing can't be sped up with parallel requests. For access from outside your network, put it behind HTTPS (a reverse proxy) so the password isn't sent in clear.
 
 ### Metadata and cover providers
 

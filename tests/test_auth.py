@@ -42,8 +42,27 @@ def test_wrong_password_then_login_and_logout(tmp_path):
     assert ok.headers["location"] == "/" and "httponly" in ok.headers["set-cookie"].lower()
     assert client.get("/api/games").status_code == 200
     assert client.get("/api/about").json()["auth"] is True
-    client.get("/logout")
+    cookie = client.cookies["glm_session"]
+    assert client.get("/logout").status_code == 405  # a link or image elsewhere can't log you out
+    assert client.get("/api/games").status_code == 200
+    client.post("/logout")
     assert client.get("/api/games").status_code == 401
+    # A copy of the cookie stops working too, also after a restart
+    client.cookies.set("glm_session", cookie)
+    assert client.get("/api/games").status_code == 401
+    restarted = make_client(tmp_path, auth_username="admin", auth_password="s3cret")
+    restarted.cookies.set("glm_session", cookie)
+    assert restarted.get("/api/games").status_code == 401
+
+
+def test_logout_keeps_other_devices_logged_in(tmp_path):
+    phone = make_client(tmp_path, auth_username="admin", auth_password="s3cret")
+    pc = make_client(tmp_path, auth_username="admin", auth_password="s3cret")
+    phone.post("/login", data={"username": "admin", "password": "s3cret"})
+    pc.post("/login", data={"username": "admin", "password": "s3cret"})
+    phone.post("/logout")
+    assert phone.get("/api/games").status_code == 401
+    assert pc.get("/api/games").status_code == 200
 
 
 def test_session_survives_restart_but_not_password_change(tmp_path):
@@ -57,11 +76,11 @@ def test_session_survives_restart_but_not_password_change(tmp_path):
     changed.cookies.set("glm_session", cookie)
     assert changed.get("/api/games").status_code == 401
     forged = make_client(tmp_path, auth_username="admin", auth_password="s3cret")
-    forged.cookies.set("glm_session", "9999999999.deadbeef")
+    forged.cookies.set("glm_session", "9999999999.00.deadbeef")
     assert forged.get("/api/games").status_code == 401
 
 
 def test_forged_cookie_with_huge_expiry_is_rejected_not_a_crash(tmp_path):
     client = TestClient(create_app(Settings(data_dir=tmp_path, auth_username="admin", auth_password="pw")))
-    client.cookies.set("glm_session", "9" * 5000 + ".abc")
-    assert client.get("/api/games").status_code == 401
+    for forged in ("9" * 5000).encode() + b".00.abc", b"9999999999.00.d\xe9adbeef":
+        assert client.get("/api/games", headers={"cookie": b"glm_session=" + forged}).status_code == 401

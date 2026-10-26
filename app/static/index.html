@@ -26,7 +26,7 @@
     <button id="settings-btn" data-i18n-title="settings.title" data-i18n-aria-label="settings.title" title="Settings" aria-label="Settings">⚙</button>
     <button id="barcode-btn" data-i18n="header.barcode">Add by barcode</button>
     <button id="add-btn" data-i18n="header.add">+ Add game</button>
-    <a id="logout-btn" class="button" href="/logout" hidden data-i18n="header.logout">Log out</a>
+    <form id="logout-btn" method="post" action="/logout" hidden><button type="submit" data-i18n="header.logout">Log out</button></form>
   </header>
 
   <div id="scrape-bar" hidden>
