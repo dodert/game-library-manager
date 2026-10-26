@@ -1,7 +1,7 @@
 {
   "_name": "English",
   "header.title": "🎮 My library",
-  "header.import_csv": "Import CSV",
+  "header.import_csv": "Import from CLZ",
   "header.export_csv": "Export CSV",
   "header.import_steam": "Import Steam",
   "header.scrape": "Find covers",
@@ -26,7 +26,7 @@
   "settings.test_library": "Steam library: {n} games",
   "settings.test_error": "Error: {error}",
   "settings.test_not_configured": "Not configured: add its keys in the container settings",
-  "import.title": "Import CSV",
+  "import.title": "Import from CLZ (CSV)",
   "import.file": "File",
   "import.delimiter": "Separator",
   "import.semicolon": "Semicolon ( ; ) — CLZ",
@@ -229,5 +229,6 @@
   "totp.setup_help": "Add this account to your authenticator app: scan the QR code, or type the code below. Then enter the 6-digit code it shows.",
   "totp.code": "One-time code",
   "totp.error": "Wrong or expired code.",
-  "totp.back": "Back"
+  "totp.back": "Back",
+  "import.clz_hint": "Export your collection from CLZ Games (clz.com) as CSV and pick that file here. A CSV exported from this app also works."
 }
