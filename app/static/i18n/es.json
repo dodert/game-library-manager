@@ -230,5 +230,6 @@
   "totp.code": "Código de un solo uso",
   "totp.error": "Código incorrecto o caducado.",
   "totp.back": "Volver",
-  "import.clz_hint": "Exporta tu colección desde CLZ Games (clz.com) en CSV y elige aquí ese archivo. También sirve un CSV exportado desde esta app."
+  "import.clz_hint": "Exporta tu colección desde CLZ Games (clz.com) en CSV y elige aquí ese archivo. También sirve un CSV exportado desde esta app.",
+  "header.data_menu": "⇅ Importar / exportar"
 }

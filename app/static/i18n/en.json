@@ -230,5 +230,6 @@
   "totp.code": "One-time code",
   "totp.error": "Wrong or expired code.",
   "totp.back": "Back",
-  "import.clz_hint": "Export your collection from CLZ Games (clz.com) as CSV and pick that file here. A CSV exported from this app also works."
+  "import.clz_hint": "Export your collection from CLZ Games (clz.com) as CSV and pick that file here. A CSV exported from this app also works.",
+  "header.data_menu": "⇅ Import / export"
 }

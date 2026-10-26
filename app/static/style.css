@@ -146,3 +146,13 @@ table.games tbody tr, .grid > .card { scroll-margin-top: 2.6rem; }
 .totp-qr svg { display: block; width: 100%; height: auto; }
 .totp-secret { display: block; text-align: center; font-size: .95rem; letter-spacing: .05em; margin-bottom: 1rem; user-select: all; overflow-wrap: anywhere; }
 .totp-back { text-align: center; margin-top: .8rem; font-size: .85rem; color: var(--muted); }
+
+/* Header drop-down menu (import / export) */
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; user-select: none; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary::after { content: " ▾"; }
+.menu[open] summary { border-color: var(--accent); }
+.menu-items { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 12rem; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgb(0 0 0 / .18); }
+.menu-items button, .menu-items .button { border: none; text-align: left; white-space: nowrap; border-radius: 4px; }
+.menu-items button:hover, .menu-items .button:hover { background: var(--bg); }
