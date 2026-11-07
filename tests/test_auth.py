@@ -141,9 +141,7 @@ def test_totp_secret_survives_restart(tmp_path):
 def test_pending_cookie_cannot_be_turned_into_a_session(tmp_path):
     client = totp_client(tmp_path)
     client.post("/login", data={"username": "admin", "password": "s3cret"}, follow_redirects=False)
-    expires, signature = client.cookies["glm_pending"].split(".")
-    client.cookies.clear()
-    client.cookies.set("glm_session", f"{expires}.pending.{signature}")
+    client.cookies.set("glm_session", client.cookies["glm_pending"])
     assert client.get("/api/games").status_code == 401
 
 
@@ -152,3 +150,39 @@ def test_damaged_totp_secret_stops_the_app_instead_of_showing_a_new_one(tmp_path
     (tmp_path / ".totp_secret").write_text("{not json")
     with pytest.raises(ValueError, match="damaged"):
         totp_client(tmp_path)
+
+
+def test_parallel_guesses_wait_in_line_even_the_right_one(tmp_path):
+    import asyncio
+    import time
+
+    import httpx
+
+    app = create_app(Settings(data_dir=tmp_path, auth_username="admin", auth_password="s3cret"))
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+            async def attempt(password):
+                start = time.perf_counter()
+                res = await c.post("/login", data={"username": "admin", "password": password})
+                return res.headers["location"], time.perf_counter() - start
+            tasks = [asyncio.create_task(attempt(f"guess{i}")) for i in range(3)]
+            await asyncio.sleep(0.05)  # the wrong ones are already in line
+            right = await attempt("s3cret")
+            await asyncio.gather(*tasks)
+            return right
+
+    location, seconds = asyncio.run(run())
+    # Before, the right password got in at once while the wrong ones waited; now it waits its turn
+    assert location == "/" and seconds >= 2.5
+
+
+def test_pending_cookie_is_single_use(tmp_path):
+    client = totp_client(tmp_path)
+    client.post("/login", data={"username": "admin", "password": "s3cret"})
+    pending = client.cookies["glm_pending"]
+    assert client.post("/login/totp", data={"code": current_code(tmp_path)}, follow_redirects=False).headers["location"] == "/"
+    client.cookies.clear()
+    client.cookies.set("glm_pending", pending)
+    res = client.post("/login/totp", data={"code": current_code(tmp_path, 1)}, follow_redirects=False)
+    assert res.headers["location"] == "/login" and "glm_session" not in res.cookies

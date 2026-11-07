@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .models import CompletionStatus, GameFormat, GameStatus
+from .models import LONG_TEXT_MAX, CompletionStatus, GameFormat, GameStatus
 
 
 class PlatformIn(BaseModel):
@@ -29,8 +29,8 @@ class GameBase(BaseModel):
     release_year: int | None = Field(default=None, ge=1950, le=2100)
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
-    notes: str | None = None
-    summary: str | None = None
+    notes: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
+    summary: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
     steam_appid: int | None = None
     loaned_to: str | None = Field(default=None, max_length=150)
     loaned_at: date | None = None
@@ -74,8 +74,8 @@ class GameUpdate(BaseModel):
     release_year: int | None = Field(default=None, ge=1950, le=2100)
     purchase_date: date | None = None
     purchase_price: float | None = Field(default=None, ge=0)
-    notes: str | None = None
-    summary: str | None = None
+    notes: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
+    summary: str | None = Field(default=None, max_length=LONG_TEXT_MAX)
     steam_appid: int | None = None
     loaned_to: str | None = Field(default=None, max_length=150)
     loaned_at: date | None = None

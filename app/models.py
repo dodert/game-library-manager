@@ -6,6 +6,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
+# Notes and descriptions are Text columns with no limit of their own; the API keeps them to this
+LONG_TEXT_MAX = 20_000
+
 
 class GameFormat(str, enum.Enum):
     physical = "physical"
