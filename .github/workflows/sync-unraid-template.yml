@@ -1,7 +1,8 @@
 name: Sync Unraid template
 
-# Copies the unraid/ folder (template XML, ca_profile.xml, icon, LICENSE, README) to the
-# public templates repo that Community Applications reads.
+# Copies this app's template XML and icon from unraid/ to the public templates repo that
+# Community Applications reads. Only these files: the templates repo owns its README (rebuilt from
+# every template by its own workflow), ca_profile.xml and LICENSE, shared by all the apps.
 # Needs the secret TEMPLATES_TOKEN: a fine-grained token with "Contents: Read and write"
 # on the templates repo only.
 
@@ -41,7 +42,7 @@ jobs:
           else
             git checkout --orphan "$TEMPLATES_BRANCH"
           fi
-          cp -r ../unraid/. .
+          cp ../unraid/game-library-manager.xml ../unraid/icon.png ../unraid/icon.svg .
           git add -A
           if git diff --cached --quiet; then
             echo "Template unchanged"
