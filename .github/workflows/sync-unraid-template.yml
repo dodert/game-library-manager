@@ -42,7 +42,7 @@ jobs:
           else
             git checkout --orphan "$TEMPLATES_BRANCH"
           fi
-          cp ../unraid/game-library-manager.xml ../unraid/icon.png ../unraid/icon.svg .
+          cp ../unraid/game-library-manager.xml ../unraid/game-library-manager.png ../unraid/game-library-manager.svg .
           git add -A
           if git diff --cached --quiet; then
             echo "Template unchanged"
