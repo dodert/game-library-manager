@@ -31,6 +31,7 @@ class Auth:
         self._key = hmac.new(self._secret(data_dir), password.encode(), hashlib.sha256).digest() if self.enabled else b""
         self._revoked_path = data_dir / ".revoked_sessions"
         self._revoked = self._load_revoked() if self.enabled else {}
+        self._used_pending: dict[str, int] = {}  # signature -> expiry of pending cookies already used
 
     @staticmethod
     def _secret(data_dir: Path) -> bytes:
@@ -88,21 +89,32 @@ class Auth:
             return False
         return hmac.compare_digest(signature, self._sign(expires, nonce)) and signature not in self._revoked
 
-    def _sign_pending(self, expires: str) -> str:
+    def _sign_pending(self, expires: str, nonce: str) -> str:
         # Its own key, so a pending cookie can never be reshaped into a valid session cookie
         key = hmac.new(self._key, b"pending-cookie", hashlib.sha256).digest()
-        return hmac.new(key, f"{self.username}|{expires}".encode(), hashlib.sha256).hexdigest()
+        return hmac.new(key, f"{self.username}|{expires}|{nonce}".encode(), hashlib.sha256).hexdigest()
 
     def new_pending(self) -> str:
-        """Short-lived proof that the password was right, while the one-time code is asked."""
-        expires = str(int(time.time()) + PENDING_SECONDS)
-        return f"{expires}.{self._sign_pending(expires)}"
+        """Short-lived proof that the password was right, while the one-time code is asked: expires.nonce.signature."""
+        expires, nonce = str(int(time.time()) + PENDING_SECONDS), secrets.token_hex(8)
+        return f"{expires}.{nonce}.{self._sign_pending(expires, nonce)}"
 
     def valid_pending(self, token: str | None) -> bool:
-        expires, _, signature = (token or "").partition(".")
-        if not (expires.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
+        parts = (token or "").split(".")
+        if len(parts) != 3:
             return False
-        return hmac.compare_digest(signature.encode(), self._sign_pending(expires).encode())
+        expires, nonce, signature = parts
+        if not (token.isascii() and expires.isdigit() and len(expires) <= 12) or int(expires) < time.time():
+            return False
+        return hmac.compare_digest(signature.encode(), self._sign_pending(expires, nonce).encode()) \
+            and signature not in self._used_pending
+
+    def use_pending(self, token: str) -> None:
+        """Single use: once it has led to a login, the same pending cookie is refused."""
+        expires, _, signature = token.split(".")
+        now = time.time()
+        self._used_pending = {s: e for s, e in self._used_pending.items() if e > now}
+        self._used_pending[signature] = int(expires)
 
     @staticmethod
     def is_public(path: str) -> bool:

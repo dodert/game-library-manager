@@ -185,3 +185,18 @@ def test_clz_hardware_filter_by_kind_and_type(client):
     assert stats["by_kind"] == {"game": 2, "hardware": 4}
     assert stats["by_item_type"]["Console"] == 2
     assert client.get("/api/games", params={"kind": "other"}).status_code == 422
+
+
+def test_export_does_not_turn_text_into_formulas(client, tmp_path):
+    pc = next(p["id"] for p in client.get("/api/platforms").json() if p["name"] == "PC")
+    client.post("/api/games", json={"title": "=HYPERLINK(\"http://x\")", "platform_id": pc, "format": "digital",
+                                    "notes": "- first\n- second", "store": "@shop"})
+    csv_text = client.get("/api/export/csv").text
+    assert "'=HYPERLINK" in csv_text and "'@shop" in csv_text and "\"'- first" in csv_text
+
+    # Importing the export gives the original text back
+    other = TestClient(create_app(Settings(data_dir=tmp_path / "other")))
+    assert upload(other, csv_text).json()["imported"] == 1
+    game = other.get("/api/games").json()["items"][0]
+    assert game["title"] == "=HYPERLINK(\"http://x\")" and game["store"] == "@shop"
+    assert game["notes"].startswith("- first")

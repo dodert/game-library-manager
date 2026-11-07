@@ -233,7 +233,7 @@
           <label><span data-i18n="field.store">Store / launcher</span> <input name="store" maxlength="100" placeholder="Steam, PSN, eShop, GOG…"></label>
           <label><span data-i18n="field.year">Year</span> <input name="release_year" type="number" min="1950" max="2100"></label>
         </div>
-        <label><span data-i18n="field.summary">Description</span> <textarea name="summary" rows="3"></textarea></label>
+        <label><span data-i18n="field.summary">Description</span> <textarea name="summary" rows="3" maxlength="20000"></textarea></label>
         <div class="row cover-row">
           <label><span data-i18n="field.cover">Cover</span> <input name="cover" type="file" accept="image/jpeg,image/png,image/webp"></label>
           <button type="button" id="covers-btn" data-i18n="game.find_covers">Find covers</button>
@@ -310,7 +310,7 @@
           <label><span data-i18n="field.loaned_at">Loan date</span> <input name="loaned_at" type="date"></label>
           <label><span data-i18n="field.loan_due">Due back</span> <input name="loan_due" type="date"></label>
         </div>
-        <label><span data-i18n="field.notes">Notes</span> <textarea name="notes" rows="3"></textarea></label>
+        <label><span data-i18n="field.notes">Notes</span> <textarea name="notes" rows="3" maxlength="20000"></textarea></label>
       </div>
       <datalist id="item-types"><option value="Console"><option value="Controller"><option value="Accessory"><option value="Amiibo"></datalist>
       <datalist id="completeness-list"><option value="CIB"><option value="New"><option value="Loose"><option value="Box only"></datalist>

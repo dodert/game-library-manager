@@ -63,7 +63,25 @@ def test_cross_site_writes_are_blocked(client):
     res = client.delete(f"/api/games/{game['id']}", headers={"Sec-Fetch-Site": "cross-site"})
     assert res.status_code == 403
     assert client.get(f"/api/games/{game['id']}", headers={"Sec-Fetch-Site": "cross-site"}).status_code == 200
+    # Another app on the same server (another port) is same-site, not same-origin
+    assert client.delete(f"/api/games/{game['id']}", headers={"Sec-Fetch-Site": "same-site"}).status_code == 403
     assert client.delete(f"/api/games/{game['id']}", headers={"Sec-Fetch-Site": "same-origin"}).status_code == 204
+
+
+def test_security_headers(client):
+    for path in ("/", "/api/health"):
+        headers = client.get(path).headers
+        assert headers["x-frame-options"] == "DENY"
+        assert "frame-ancestors 'none'" in headers["content-security-policy"]
+        assert headers["referrer-policy"] == "same-origin"
+        assert headers["x-content-type-options"] == "nosniff"
+
+
+def test_notes_and_summary_have_a_limit(client):
+    game = new_game(client)
+    assert client.patch(f"/api/games/{game['id']}", json={"notes": "x" * 20_000}).status_code == 200
+    assert client.patch(f"/api/games/{game['id']}", json={"notes": "x" * 20_001}).status_code == 422
+    assert client.patch(f"/api/games/{game['id']}", json={"summary": "x" * 20_001}).status_code == 422
 
 
 def test_bulk_lookup_survives_a_game_deleted_mid_run(tmp_path):

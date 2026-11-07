@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload, sessionmaker
 from sqlalchemy.orm.exc import StaleDataError
 
 from .images import ImageError, save_first_cover
-from .models import Game
+from .models import LONG_TEXT_MAX, Game
 from .providers import MetadataProvider, SearchResult, error_message
 from .providers.steam import cover_candidates as steam_cover_candidates
 from .text import clean_html
@@ -83,7 +83,7 @@ def cover_options(game_title: str, platform: str, results: list[SearchResult],
 
 
 # Game fields a lookup can fill (only when empty), and the text limit of each column
-DETAIL_FIELDS = {"summary": None, "release_year": None, "publisher": 150, "developer": 150, "genre": 150, "series": 150}
+DETAIL_FIELDS = {"summary": LONG_TEXT_MAX, "release_year": None, "publisher": 150, "developer": 150, "genre": 150, "series": 150}
 
 
 def fill_details(game: Game, matches: list[SearchResult]) -> bool:
@@ -94,7 +94,7 @@ def fill_details(game: Game, matches: list[SearchResult]) -> bool:
             continue
         value = next((getattr(r, name) for r in matches if getattr(r, name)), None)
         if name == "summary":
-            value = clean_html(value)
+            value = (clean_html(value) or "")[:limit]
         elif isinstance(value, str) and limit:
             value = value[:limit]
         if value:

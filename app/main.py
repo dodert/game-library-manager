@@ -138,9 +138,22 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     app = FastAPI(title="Game Library Manager", version=version, lifespan=lifespan)
 
     @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        # No other website may show the app inside a frame (clickjacking), nor learn its addresses
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy",
+                                    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
+
+    @app.middleware("http")
     async def reject_cross_site_writes(request: Request, call_next):
-        # No login, so another website open in the browser could post forms here (e.g. a CSV import)
-        if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("sec-fetch-site") == "cross-site":
+        # Another website open in the browser could post forms here (e.g. a CSV import). "same-site"
+        # counts too: another app on the same server (another port) is same-site, not same-origin.
+        if request.method not in ("GET", "HEAD", "OPTIONS") and \
+                request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
             return Response("Cross-site request blocked", status_code=403)
         return await call_next(request)
 
@@ -579,7 +592,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     def apple_touch_icon():
         return FileResponse(STATIC_DIR / "icons" / "apple-touch-icon.png", media_type="image/png")
 
-    failed_login_lock = asyncio.Lock()
+    # One password and one one-time code checked at a time for the whole app, and a wrong one keeps
+    # the line waiting: guesses sent in parallel queue up, so a right guess can't slip in early
+    password_lock = asyncio.Lock()
+    code_lock = asyncio.Lock()
     login_html = (STATIC_DIR / "login.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
     totp_html = (STATIC_DIR / "totp.html").read_text(encoding="utf-8").replace("{{ASSET_VERSION}}", asset_version)
 
@@ -595,13 +611,6 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
 
     wrong_codes = 0  # wrong one-time codes in a row, for the whole app
 
-    async def failed(location: str, delay: float = 1) -> RedirectResponse:
-        # One wrong password or code at a time for the whole app: parallel requests wait in line,
-        # so guessing can't be sped up by sending many at once
-        async with failed_login_lock:
-            await asyncio.sleep(delay)
-        return RedirectResponse(location, status_code=303)
-
     @app.get("/login", include_in_schema=False)
     def login_page(request: Request):
         if not auth.enabled or auth.valid_session(request.cookies.get(COOKIE)):
@@ -612,8 +621,10 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     async def login(request: Request, username: str = Form(""), password: str = Form("")):
         if not auth.enabled:
             return RedirectResponse("/", status_code=303)
-        if not auth.check_credentials(username, password):
-            return await failed("/login?error=1")
+        async with password_lock:
+            if not auth.check_credentials(username, password):
+                await asyncio.sleep(1)
+                return RedirectResponse("/login?error=1", status_code=303)
         if not totp:
             return logged_in(request)
         # Password right: now the one-time code (or adding the secret to the app, the first time)
@@ -637,16 +648,20 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
     @app.post("/login/totp", include_in_schema=False)
     async def totp_login(request: Request, code: str = Form("")):
         nonlocal wrong_codes
-        if not totp or not auth.valid_pending(request.cookies.get(PENDING_COOKIE)):
-            return RedirectResponse("/login", status_code=303)
-        if not totp.verify(code):
-            # 1 s for the first few, then doubling up to a minute: with the password known, guessing
-            # the code would otherwise take days; this way it takes years. A right code resets it.
-            wrong_codes += 1
-            return await failed("/login/totp?error=1", min(60, 2 ** max(0, wrong_codes - 5)))
-        wrong_codes = 0
-        if not totp.confirmed:
-            totp.confirm()
+        pending = request.cookies.get(PENDING_COOKIE)
+        async with code_lock:
+            if not totp or not auth.valid_pending(pending):
+                return RedirectResponse("/login", status_code=303)
+            if not totp.verify(code):
+                # 1 s for the first few, then doubling up to a minute: with the password known, guessing
+                # the code would otherwise take days; this way it takes years. A right code resets it.
+                wrong_codes += 1
+                await asyncio.sleep(min(60, 2 ** max(0, wrong_codes - 5)))
+                return RedirectResponse("/login/totp?error=1", status_code=303)
+            wrong_codes = 0
+            auth.use_pending(pending)  # logged in: this pending cookie can't be used again
+            if not totp.confirmed:
+                totp.confirm()
         return logged_in(request)
 
     # POST only, so another website can't log you out with a link or an image

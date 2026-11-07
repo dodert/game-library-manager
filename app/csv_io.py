@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .text import clean_html
-from .models import CompletionStatus, Game, GameFormat, GameStatus, Platform
+from .models import LONG_TEXT_MAX, CompletionStatus, Game, GameFormat, GameStatus, Platform
 
 EXPORT_FIELDS = [
     "title", "platform", "format", "status", "completion", "store", "edition", "region",
@@ -84,7 +84,19 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().lower().replace("_", " "))
 
 
-TEXT_LIMITS = {f: getattr(Game.__table__.c[f].type, "length", None) for f in TEXT_FIELDS}
+TEXT_LIMITS = {f: getattr(Game.__table__.c[f].type, "length", None) or LONG_TEXT_MAX for f in TEXT_FIELDS}
+
+# Excel and LibreOffice run a cell that starts with one of these as a formula. The export puts a
+# ' in front so it shows as text, and the import takes it off again.
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _as_text(value: str) -> str:
+    return "'" + value if value.startswith(FORMULA_STARTS) else value
+
+
+def _from_text(value: str) -> str:
+    return value[1:] if value.startswith("'") and value[1:].startswith(FORMULA_STARTS) else value
 ALIAS_LOOKUP = {_norm(alias): field for field, aliases in ALIASES.items() for alias in aliases}
 
 
@@ -101,6 +113,8 @@ def export_csv(db: Session) -> str:
                 row[key] = value.value
             elif value is None:
                 row[key] = ""
+            if isinstance(row[key], str):
+                row[key] = _as_text(row[key])
         writer.writerow(row)
     return out.getvalue()
 
@@ -235,7 +249,7 @@ def import_csv(
 
     imported, skipped, errors = 0, 0, []
     for line, row in enumerate(reader, start=2):
-        values = {field: (row.get(header) or "").strip() for header, field in mapping.items()}
+        values = {field: _from_text((row.get(header) or "").strip()) for header, field in mapping.items()}
         title = clean_html(values.get("title", "")) or ""
         if not title:
             skipped += 1
