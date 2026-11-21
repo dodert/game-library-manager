@@ -107,6 +107,9 @@ def test_search_all_providers(client):
     assert igdb["release_year"] == 2020
     assert igdb["cover_urls"] == ["https://images.igdb.com/igdb/image/upload/t_cover_big_2x/co39vc.jpg"]
     assert "Nintendo Switch" in igdb["platforms"]
+    platform_ids = {p["name"]: p["id"] for p in client.get("/api/platforms").json()}
+    assert igdb["platform_ids"] == [platform_ids["PC"], platform_ids["Nintendo Switch"]]
+    assert by_provider["screenscraper"]["platform_ids"] == [platform_ids["Nintendo Switch"]]
 
     assert by_provider["steamgriddb"]["cover_urls"] == ["https://cdn2.steamgriddb.com/grid/a.png"]
     assert by_provider["steam"]["cover_urls"][0].endswith("/1145360/library_600x900.jpg")
