@@ -12,6 +12,7 @@ let providers = [];
 let tab = "collection";
 const TAB_STATUS = { collection: ["owned", "lent"], wishlist: ["wishlist"], lent: ["lent"], sold: ["sold"] };
 let pendingCover = null; // {provider, urls, thumb} chosen from an online search
+let platformChosen = false; // set by hand, by the barcode or by an existing game: a search result won't change it
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -120,6 +121,9 @@ function applyResult(r) {
     // With a "Search as" text the title is deliberately different (an edition, a pack…): keep it
     if (!f.search_title.value.trim()) f.title.value = r.title;
     for (const key of ["release_year", "summary", "publisher", "developer", "genre", "series"]) if (r[key]) f[key].value = r[key];
+    // Keep a platform the user (or the barcode) chose; otherwise take the result's first known one
+    const ids = r.platform_ids ?? [];
+    if (ids.length && !ids.includes(Number(f.platform_id.value)) && !platformChosen) f.platform_id.value = ids[0];
   }
   if (r.provider === "steam") f.steam_appid.value = r.external_id;
   if ($("#use-cover").checked && r.cover_urls.length) {
@@ -460,6 +464,7 @@ function openDialog(game) {
   const form = $("#game-form");
   form.reset();
   pendingCover = null;
+  platformChosen = Boolean(game);
   renderLookupOpts();
   $("#lookup").hidden = true;
   $("#cover-preview").hidden = !game?.cover_url;
@@ -541,6 +546,7 @@ $("#delete-btn").addEventListener("click", async () => {
 });
 
 $("#lookup-btn").addEventListener("click", lookup);
+$("#game-form [name=platform_id]").addEventListener("change", () => { platformChosen = true; });
 $("#covers-btn").addEventListener("click", searchCovers);
 $("#game-form").elements.cover.addEventListener("change", (ev) => {
   const file = ev.target.files[0];
@@ -707,7 +713,10 @@ function addFromBarcode() {
   const form = $("#game-form");
   form.elements.barcode.value = r.code;
   form.elements.format.value = "physical";
-  if (r.platform_id) form.elements.platform_id.value = r.platform_id;
+  if (r.platform_id) {
+    form.elements.platform_id.value = r.platform_id;
+    platformChosen = true;
+  }
   if (r.title) {
     form.elements.title.value = r.title;
     lookup();

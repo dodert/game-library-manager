@@ -13,13 +13,18 @@ MAX_PHOTO_PIXELS = 50_000_000
 UPCITEMDB_URL = "https://api.upcitemdb.com/prod/trial/lookup"
 BARCODE_PATTERN = r"^\d{8,14}$"
 
-# Short names shops use in product titles -> platform name in the app
+# Other names shops (product titles) and metadata providers (IGDB, ScreenScraper) use
+# -> platform name in the app. The longest name found wins, so "super nintendo entertainment
+# system" beats "nintendo entertainment system" and "playstation portable" beats "playstation".
 PLATFORM_ALIASES = {
     "ps1": "PlayStation", "psx": "PlayStation", "ps2": "PlayStation 2", "ps3": "PlayStation 3",
     "ps4": "PlayStation 4", "ps5": "PlayStation 5", "psvita": "PS Vita", "vita": "PS Vita",
     "switch": "Nintendo Switch", "switch 2": "Nintendo Switch 2", "3ds": "Nintendo 3DS", "nds": "Nintendo DS",
     "xbox series x": "Xbox Series X|S", "xbox series s": "Xbox Series X|S", "gba": "Game Boy Advance",
-    "n64": "Nintendo 64", "genesis": "Mega Drive",
+    "n64": "Nintendo 64", "genesis": "Mega Drive", "megadrive": "Mega Drive",
+    "playstation portable": "PSP", "playstation vita": "PS Vita",
+    "nintendo entertainment system": "NES", "famicom": "NES",
+    "super nintendo entertainment system": "SNES", "super nintendo": "SNES", "super famicom": "SNES",
 }
 # Separators shops put between the game and the platform ("Hades - Nintendo Switch", "Hades (PS4)")
 _SUFFIX = re.compile(r"(?:\s+[-–—|]\s+|\s*[:,]\s*|\s*\()([^()|:,]+?)\)?\s*$")
@@ -57,6 +62,17 @@ def guess_platform(text: str, platform_names: list[str]) -> str | None:
             candidates.setdefault(alias, candidates[name.lower()])
     found = [key for key in candidates if re.search(rf"(?<![\w]){re.escape(key)}(?![\w])", lowered)]
     return candidates[max(found, key=len)] if found else None
+
+
+def match_platforms(provider_platforms: list[str], platforms: dict[str, int]) -> list[int]:
+    """Ids of the app platforms ({name: id}) that a search result's platform names refer to,
+    in the result's order and without repeats ("PC (Microsoft Windows)" -> PC)."""
+    ids = []
+    for text in provider_platforms:
+        name = guess_platform(text, list(platforms))
+        if name and platforms[name] not in ids:
+            ids.append(platforms[name])
+    return ids
 
 
 def clean_title(title: str, platform_names: list[str]) -> str:

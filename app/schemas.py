@@ -164,6 +164,7 @@ class MetadataResult(BaseModel):
     title: str
     release_year: int | None = None
     platforms: list[str] = []
+    platform_ids: list[int] = []  # app platforms matching `platforms`, see barcode.match_platforms
     summary: str | None = None
     publisher: str | None = None
     developer: str | None = None

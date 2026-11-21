@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import __version__
 from .auth import COOKIE, PENDING_COOKIE, PENDING_SECONDS, SESSION_SECONDS, Auth
-from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, read_barcode
+from .barcode import BARCODE_PATTERN, clean_title, guess_platform, lookup_upcitemdb, match_platforms, read_barcode
 from .config import Settings, settings as default_settings
 from .csv_io import export_csv, import_csv
 from .db import make_engine, make_sessionmaker
@@ -403,9 +403,14 @@ def create_app(settings: Settings = default_settings, http_client: httpx.AsyncCl
         return results, errors
 
     @app.get("/api/metadata/search", response_model=MetadataSearchOut)
-    async def metadata_search(q: str = Query(min_length=1), provider: list[str] = Query(default=[])):
+    async def metadata_search(q: str = Query(min_length=1), provider: list[str] = Query(default=[]),
+                              db: Session = Depends(get_db)):
         results, errors = await search_providers(q, provider)
-        return MetadataSearchOut(results=[r.__dict__ for r in results], errors=errors)
+        platforms = {p.name: p.id for p in db.scalars(select(Platform))}
+        return MetadataSearchOut(
+            results=[r.__dict__ | {"platform_ids": match_platforms(r.platforms, platforms)} for r in results],
+            errors=errors,
+        )
 
     @app.get("/api/covers/search", response_model=CoverSearchOut)
     async def cover_search(q: str = Query(min_length=1), platform: str = "", provider: list[str] = Query(default=[])):
