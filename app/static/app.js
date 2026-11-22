@@ -272,18 +272,38 @@ function tableHead() {
   return `<table class="games"><thead><tr><th></th>${COLUMNS.map(th).join("")}</tr></thead><tbody></tbody></table>`;
 }
 
-// Sort by a column: same column again flips the direction. Columns that are not in the
-// sort menu get a temporary option, so the menu always shows the current order.
-function sortBy(key) {
+// Chosen order, remembered per browser like the view (glm-view)
+const SORT_KEY = "glm-sort";
+
+const saveSort = () => { try { localStorage.setItem(SORT_KEY, $("#sort").value); } catch {} };
+
+// Select an order in the sort menu. Columns that are not in the menu get a temporary
+// option, so the menu always shows the current order. False if the value is not valid.
+function setSort(value) {
   const select = $("#sort");
-  const value = select.value === key ? `-${key}` : key;
-  let option = [...select.options].find((o) => o.value === value);
+  let option = [...select.options].find((o) => o.value === value && o.id !== "sort-column");
   if (!option) {
+    const key = value.replace(/^-/, "");
+    if (!COLUMNS.includes(key)) return false;
     option = $("#sort-column") ?? select.appendChild(Object.assign(document.createElement("option"), { id: "sort-column" }));
     option.value = value;
     option.textContent = `${t(`column.${key}`)} ${value.startsWith("-") ? "▼" : "▲"}`;
   }
   select.value = value;
+  return true;
+}
+
+// Restore the remembered order before the first load; anything unknown keeps the default
+function restoreSort() {
+  let saved = null;
+  try { saved = localStorage.getItem(SORT_KEY); } catch {}
+  if (saved) setSort(saved);
+}
+
+// Sort by a column: same column again flips the direction
+function sortBy(key) {
+  setSort($("#sort").value === key ? `-${key}` : key);
+  saveSort();
   loadGames();
 }
 
@@ -733,7 +753,8 @@ $("#grid").addEventListener("click", async (ev) => {
 
 let debounce;
 $("#q").addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(() => loadGames(), 250); });
-for (const sel of ["#f-platform", "#f-format", "#f-item-type", "#sort"]) $(sel).addEventListener("change", () => loadGames());
+for (const sel of ["#f-platform", "#f-format", "#f-item-type"]) $(sel).addEventListener("change", () => loadGames());
+$("#sort").addEventListener("change", () => { saveSort(); loadGames(); });
 $("#f-kind").addEventListener("change", () => {
   $("#f-item-type").hidden = $("#f-kind").value !== "hardware";
   loadGames();
@@ -918,6 +939,7 @@ $("#settings-form").addEventListener("submit", (ev) => {
 });
 
 initI18n().finally(() => {
+  restoreSort();
   renderPager();
   Promise.all([loadPlatforms(), loadProviders()]).then(refresh);
   loadAbout();
