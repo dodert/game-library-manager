@@ -1,7 +1,7 @@
 import httpx
 from fastapi.testclient import TestClient
 
-from app.barcode import clean_title, guess_platform
+from app.barcode import clean_title, guess_platform, match_platforms
 from app.config import Settings
 from app.main import create_app
 from app.seed import DEFAULT_PLATFORMS
@@ -81,3 +81,19 @@ def test_barcode_from_photo(tmp_path):
     assert res.json() == {"code": "5030917285394"}
     blank = client.post("/api/barcode/scan", files={"file": ("x.jpg", b"not an image", "image/jpeg")})
     assert blank.status_code == 422
+
+
+def test_match_provider_platforms():
+    """Names IGDB / ScreenScraper give -> app platform ids, in order and without repeats (issue #51)."""
+    ids = {name: i for i, name in enumerate(PLATFORMS, 1)}
+    cases = {
+        "PC (Microsoft Windows)": "PC", "Switch": "Nintendo Switch", "Nintendo Switch 2": "Nintendo Switch 2",
+        "PlayStation 4": "PlayStation 4", "PlayStation Portable": "PSP", "PlayStation Vita": "PS Vita",
+        "Super Nintendo Entertainment System": "SNES", "Nintendo Entertainment System": "NES",
+        "Sega Mega Drive/Genesis": "Mega Drive", "Nintendo GameCube": "GameCube", "Xbox Series X|S": "Xbox Series X|S",
+        "Wii U": "Wii U",
+    }
+    for text, name in cases.items():
+        assert match_platforms([text], ids) == [ids[name]], text
+    assert match_platforms(["Mac", "PC (Microsoft Windows)", "Linux", "PC"], ids) == [ids["PC"]]
+    assert match_platforms([], ids) == []
